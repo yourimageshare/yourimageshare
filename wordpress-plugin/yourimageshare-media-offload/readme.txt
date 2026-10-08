@@ -1,5 +1,5 @@
 === YourImageShare Media Offload ===
-Contributors: yourimageshare
+Contributors: razvanccyis
 Tags: media offload, image hosting, video hosting, storage
 Requires at least: 6.0
 Tested up to: 7.1
