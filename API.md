@@ -78,21 +78,30 @@ independently from the API tab at any time.
 
 ## Endpoints
 
-All three endpoints share the same authentication and rate limiting.
+All endpoints share the same authentication. Uploads, lists and deletes
+share the rate limits below; upload pieces (`POST /api/chunk`) have their
+own, higher limit.
 
 ### POST /api - Upload a file
 
-Uploads a single file for the authenticated account.
+Uploads a single file for the authenticated account. Send the file in one
+of three ways:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `uploads` | file | yes | The file to upload. One file per request - this endpoint does not batch-upload multiple files. |
+| `uploads` | file | one of these three | The file itself (multipart/form-data), up to 100 MB - the most a single request can carry. |
+| `url` | string | | A public http(s) link to an image or video. We download it ourselves, up to 200 MB. |
+| `upload_id` | string | | A file sent in pieces to `POST /api/chunk` beforehand (32 hex characters), up to 200 MB. See [Large files](#large-files-post-apichunk). |
+| `filename` | string | no | With `upload_id`: the original file name (used for the file type check and shown on the upload's page). |
 | `expires_in` | integer | no | Auto-delete this upload after this many seconds (60 to 2,592,000, i.e. 1 minute to 30 days). Omit for a normal, permanent upload. |
+| `allow_duplicate` | boolean | no | Store a new copy even if this account already uploaded the exact same file (see `duplicate` below). |
 
-Accepted types: JPEG, PNG, GIF images; MP4, WebM, AVI video (exact list is
-server-configurable and may expand over time). Max size is
-server-configurable; oversized or unreadable files are rejected with a
-`422`.
+Accepted types: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF and HEIC/HEIF images;
+MP4, WebM, AVI, MOV, M4V, MKV, MPEG, WMV, FLV and 3GP video. HEIC/HEIF and
+TIFF are stored as WebP; video other than MP4/WebM is converted to MP4.
+Larger JPEG/PNG images are converted to WebP shortly after upload when
+that makes the file noticeably smaller. Max size is 200 MB; oversized or
+unreadable files are rejected with a `422`.
 
 Response - `200 OK`:
 
@@ -103,10 +112,16 @@ Response - `200 OK`:
   "data": {
     "id": "aB3xY9qRz1",
     "type": "image",
-    "path": "https://i.yourimageshare.com/aB3xY9qRz1.webp",
-    "src": "https://yourimageshare.com/ib/aB3xY9qRz1.webp",
+    "path": "https://i.yourimageshare.com/aB3xY9qRz1.png",
+    "src": "https://yourimageshare.com/ib/aB3xY9qRz1.png",
     "direct": "https://yourimageshare.com/ib/aB3xY9qRz1",
-    "expires_at": null
+    "thumb": "https://i.yourimageshare.com/thumb-aB3xY9qRz1.webp",
+    "width": 1920,
+    "height": 1080,
+    "size": 482113,
+    "locked": false,
+    "expires_at": null,
+    "duplicate": false
   }
 }
 ```
@@ -115,16 +130,37 @@ Response - `200 OK`:
 |---|---|
 | `id` | The file's unique identifier. |
 | `type` | `image` or `video`. |
-| `path` | The raw storage URL of the uploaded file. |
-| `src` | Direct file URL - opens the file itself, suitable for an `<img>`/`<video>` `src`. |
+| `path` | The storage URL of the file as uploaded. It can change shortly afterwards when the file is converted (WebP/MP4), so **store `src`, not `path`**. |
+| `src` | Permanent direct file URL - always opens the current file, suitable for an `<img>`/`<video>` `src` and for saving. |
 | `direct` | The file's page on YourImageShare (title, description, comments, share options). |
+| `thumb` | A 280 px wide WebP thumbnail (for a video, its first frame), or `null`. |
+| `width`, `height` | Display size in pixels (upright, after EXIF rotation; a video's frame size), or `null` if unknown. |
+| `size` | File size in bytes as stored. |
+| `locked` | `true` if the upload is password-protected. |
 | `expires_at` | ISO 8601 timestamp this upload will be auto-deleted at, or `null` if it doesn't expire. |
+| `duplicate` | `true` if this account had already uploaded the exact same file: the existing upload is returned and nothing new is stored (it doesn't count as a new file, but the request still counts toward rate limits). Not applied to expiring uploads or with `allow_duplicate=1`. |
 
 **Expiring uploads:** once `expires_at` passes, the file is deleted from
 storage and the upload's page starts returning `410 Gone` within about 5
 minutes. This can't be undone or extended after the fact - delete early
 with the DELETE endpoint if you need to remove it sooner, or re-upload
 with a new `expires_in` if you need it to last longer.
+
+### Large files (POST /api/chunk)
+
+A single request can carry at most 100 MB. For bigger files (up to
+200 MB), or to keep each request small on a slow connection, send the
+file in pieces of at most 5 MB, then finish with `POST /api`:
+
+1. Pick an upload id: 32 random hex characters.
+2. For each piece, `POST /api/chunk` (multipart/form-data) with `upload_id`,
+   `index` (0-based), `total` (number of pieces) and the bytes in `chunk`.
+   The answer is `{"type": "success", "chunk_size": 5242880}`.
+3. `POST /api` with `upload_id` and `filename` (instead of `uploads`), plus
+   any other upload field. The answer is the normal upload response.
+
+Pieces of an upload that isn't finished are deleted after 2 hours. Only
+the finishing `POST /api` counts toward the upload rate limits.
 
 ### GET /api - List your uploads
 
@@ -148,6 +184,11 @@ Response - `200 OK`:
       "path": "https://i.yourimageshare.com/aB3xY9qRz1.webp",
       "src": "https://yourimageshare.com/ib/aB3xY9qRz1.webp",
       "direct": "https://yourimageshare.com/ib/aB3xY9qRz1",
+      "thumb": "https://i.yourimageshare.com/thumb-aB3xY9qRz1.webp",
+      "width": 1920,
+      "height": 1080,
+      "size": 482113,
+      "locked": false,
       "expires_at": null,
       "created_at": "2026-07-23T15:43:28+01:00"
     }
@@ -156,8 +197,9 @@ Response - `200 OK`:
 }
 ```
 
-`path`, `src`, `direct`, and `expires_at` mean the same thing here as they
-do on the upload response above. There's no single "get one upload"
+The fields mean the same thing here as they do on the upload response
+above (for a password-protected upload, `path` and `thumb` are short-lived
+signed links). There's no single "get one upload"
 endpoint yet, so this list is also the way to look up a file's `id` after
 the fact.
 
@@ -180,14 +222,15 @@ never yours, or it's already been deleted).
 
 Each API key has independent per-minute and per-day quotas, plus a coarser
 per-IP daily ceiling as a backstop against one IP cycling through multiple
-keys. All three endpoints share the same limits - there's no extra cost
-for uploads versus lists or deletes.
+keys. Uploads, lists and deletes share the same limits.
 
 | Window | Default limit | Scope |
 |---|---|---|
 | Per minute | 20 requests | per API key |
-| Per day | 500 requests | per API key |
+| Per day | 500 requests | per full API key |
+| Per day | 2,000 requests | per Upload-only key (plugins that offload whole media libraries) |
 | Per day | 2,000 requests | per IP address |
+| Per minute | 300 pieces | per API key, `POST /api/chunk` only |
 
 These defaults are admin-configurable and may change. Every response
 includes standard rate-limit headers:
@@ -213,7 +256,8 @@ Every error response uses the same shape, regardless of endpoint or cause:
 | 401 | Missing or invalid API key. |
 | 403 | The account or your current IP has been banned from uploading. |
 | 404 | No matching upload found for that id on this account (delete only). |
-| 422 | Validation failure - no file provided, an unsupported file type, unreadable image data, or dimensions over the 30000x30000px limit. |
+| 413 | The request body is over 100 MB. Send the file in pieces (`POST /api/chunk`) or as a `url` instead. |
+| 422 | Validation failure - no file provided, an unsupported file type, unreadable image data, dimensions over the 30000x30000px limit, a file over 200 MB, or an unfinished/expired `upload_id`. |
 | 429 | Rate limit exceeded - see [Rate limits](#rate-limits) above. |
 | 500 | Something failed unexpectedly server-side. Safe to retry. |
 

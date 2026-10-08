@@ -14,61 +14,61 @@ if (!defined('ABSPATH')) {
 class YIS_Storage {
 
 	/**
-	 * Total on-disk bytes for this attachment right now: the original file
-	 * plus every size in $metadata['sizes']. Must be called BEFORE
-	 * delete_local_files() - there's nothing left to measure after.
+	 * Every local file of an attachment: the attached file, every size in
+	 * $metadata['sizes'], and - since WordPress 5.3 scales big images down
+	 * to a "-scaled" copy - the untouched original kept next to it
+	 * ($metadata['original_image']), usually the biggest file of all.
+	 *
+	 * @return string[] Absolute paths (existing or not).
 	 */
-	public static function calculate_local_bytes($file_path, $metadata) {
-		$total = 0;
+	public static function local_files($file_path, $metadata) {
+		$dir = dirname($file_path);
+		$files = array($file_path);
 
-		if (file_exists($file_path)) {
-			$total += filesize($file_path);
+		if (!empty($metadata['original_image']) && is_string($metadata['original_image'])) {
+			$files[] = $dir . '/' . wp_basename($metadata['original_image']);
 		}
 
 		if (!empty($metadata['sizes']) && is_array($metadata['sizes'])) {
-			$dir = dirname($file_path);
 			foreach ($metadata['sizes'] as $size) {
-				if (empty($size['file'])) {
-					continue;
-				}
-				$size_path = $dir . '/' . $size['file'];
-				if (file_exists($size_path)) {
-					$total += filesize($size_path);
+				if (!empty($size['file'])) {
+					$files[] = $dir . '/' . wp_basename($size['file']);
 				}
 			}
 		}
 
+		return array_values(array_unique($files));
+	}
+
+	/**
+	 * Total on-disk bytes for this attachment right now. Must be called
+	 * BEFORE delete_local_files() - there's nothing left to measure after.
+	 */
+	public static function calculate_local_bytes($file_path, $metadata) {
+		$total = 0;
+		foreach (self::local_files($file_path, $metadata) as $path) {
+			if (file_exists($path)) {
+				$total += (int) filesize($path);
+			}
+		}
 		return $total;
 	}
 
 	/**
-	 * Deletes the original file and every generated intermediate size from
-	 * local disk. This is the actual space-saving mechanism - offloading
-	 * alone doesn't help a storage-constrained host unless the local copy
-	 * genuinely goes away afterward.
+	 * Deletes the attachment's files from local disk. This is the actual
+	 * space-saving mechanism - offloading alone doesn't help a
+	 * storage-constrained host unless the local copy genuinely goes away.
 	 */
 	public static function delete_local_files($file_path, $metadata) {
 		$deleted = 0;
-
-		if (file_exists($file_path)) {
-			if (@unlink($file_path)) {
-				$deleted++;
-			}
-		}
-
-		if (!empty($metadata['sizes']) && is_array($metadata['sizes'])) {
-			$dir = dirname($file_path);
-			foreach ($metadata['sizes'] as $size) {
-				if (empty($size['file'])) {
-					continue;
-				}
-				$size_path = $dir . '/' . $size['file'];
-				if (file_exists($size_path) && @unlink($size_path)) {
+		foreach (self::local_files($file_path, $metadata) as $path) {
+			if (file_exists($path)) {
+				wp_delete_file($path);
+				if (!file_exists($path)) {
 					$deleted++;
 				}
 			}
 		}
-
 		return $deleted;
 	}
 
@@ -83,13 +83,6 @@ class YIS_Storage {
 	}
 
 	public static function format_bytes($bytes) {
-		$bytes = max(0, (int) $bytes);
-		$units = array('B', 'KB', 'MB', 'GB', 'TB');
-		$i = 0;
-		while ($bytes >= 1024 && $i < count($units) - 1) {
-			$bytes /= 1024;
-			$i++;
-		}
-		return round($bytes, $i === 0 ? 0 : 1) . ' ' . $units[$i];
+		return size_format(max(0, (int) $bytes), 1) ?: '0 B';
 	}
 }

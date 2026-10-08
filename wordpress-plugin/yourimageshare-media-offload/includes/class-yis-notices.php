@@ -21,13 +21,13 @@ class YIS_Notices {
 		add_action('wp_ajax_yis_dismiss_failures', array(__CLASS__, 'ajax_dismiss'));
 	}
 
-	public static function record_failure($attachment_id, $message) {
+	public static function record_failure($attachment_id, $message, $title = null) {
 		$failures = get_option(self::OPTION_KEY, array());
 		if (!is_array($failures)) {
 			$failures = array();
 		}
 		$failures[$attachment_id] = array(
-			'title' => get_the_title($attachment_id) ?: sprintf('#%d', $attachment_id),
+			'title' => $title ? $title : (get_the_title($attachment_id) ? get_the_title($attachment_id) : sprintf('#%d', $attachment_id)),
 			'message' => $message,
 			'time' => time(),
 		);
@@ -60,16 +60,22 @@ class YIS_Notices {
 		}
 
 		$count = count($failures);
+		wp_register_script('yis-offload-notices', false, array('jquery'), YIS_OFFLOAD_VERSION, true);
+		wp_enqueue_script('yis-offload-notices');
+		wp_add_inline_script('yis-offload-notices', sprintf(
+			'jQuery(function ($) { $("#yis-offload-failures-notice").on("click", ".notice-dismiss", function () { $.post(ajaxurl, { action: "yis_dismiss_failures", nonce: %s }); }); });',
+			wp_json_encode(wp_create_nonce('yis_dismiss_failures'))
+		));
 		?>
 		<div class="notice notice-warning is-dismissible" id="yis-offload-failures-notice">
 			<p>
 				<strong><?php esc_html_e('YourImageShare Media Offload:', 'yourimageshare-media-offload'); ?></strong>
 				<?php
-				printf(
+				echo esc_html(sprintf(
 					/* translators: %d: number of files that failed to offload */
-					esc_html(_n('%d file failed to offload and was left on local disk.', '%d files failed to offload and were left on local disk.', $count, 'yourimageshare-media-offload')),
+					_n('%d file could not be offloaded or deleted on YourImageShare.', '%d files could not be offloaded or deleted on YourImageShare.', $count, 'yourimageshare-media-offload'),
 					$count
-				);
+				));
 				?>
 			</p>
 			<ul style="list-style:disc;margin-left:2em">
@@ -81,16 +87,6 @@ class YIS_Notices {
 				<?php endforeach; ?>
 			</ul>
 		</div>
-		<script>
-		(function ($) {
-			$('#yis-offload-failures-notice').on('click', '.notice-dismiss', function () {
-				$.post(ajaxurl, {
-					action: 'yis_dismiss_failures',
-					nonce: <?php echo wp_json_encode(wp_create_nonce('yis_dismiss_failures')); ?>
-				});
-			});
-		})(jQuery);
-		</script>
 		<?php
 	}
 

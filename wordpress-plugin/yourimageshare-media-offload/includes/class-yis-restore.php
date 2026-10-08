@@ -25,6 +25,9 @@ class YIS_Restore {
 
 		$attachment_id = isset($_POST['attachment_id']) ? absint($_POST['attachment_id']) : 0;
 		$delete_remote_after = !empty($_POST['delete_remote']);
+		if (!$attachment_id || !current_user_can('edit_post', $attachment_id)) {
+			wp_send_json_error(array('message' => __('Permission denied.', 'yourimageshare-media-offload')), 403);
+		}
 
 		$result = self::restore($attachment_id, $delete_remote_after);
 
@@ -44,14 +47,14 @@ class YIS_Restore {
 	 * @return true|WP_Error
 	 */
 	public static function restore($attachment_id, $delete_remote_after = false) {
-		if (!$attachment_id || !get_post($attachment_id)) {
+		if (!$attachment_id || get_post_type($attachment_id) !== 'attachment') {
 			return new WP_Error('yis_invalid_attachment', __('Attachment not found.', 'yourimageshare-media-offload'));
 		}
 		if (!YIS_Media::is_offloaded($attachment_id)) {
 			return new WP_Error('yis_not_offloaded', __('This attachment is not offloaded.', 'yourimageshare-media-offload'));
 		}
 
-		$remote_url = get_post_meta($attachment_id, YIS_Media::META_URL, true);
+		$remote_url = YIS_Media::remote_url($attachment_id);
 		$remote_id = get_post_meta($attachment_id, YIS_Media::META_ID, true);
 
 		if (!function_exists('download_url')) {
@@ -75,24 +78,34 @@ class YIS_Restore {
 		// reads it from postmeta, it doesn't check the filesystem.
 		$file_path = get_attached_file($attachment_id);
 		if (!$file_path) {
-			@unlink($tmp_file);
+			wp_delete_file($tmp_file);
 			return new WP_Error('yis_no_path', __('Could not determine the original local file path.', 'yourimageshare-media-offload'));
+		}
+
+		// a big image was offloaded as its full-size original (the file WordPress keeps next to the "-scaled" copy):
+		// put it back under that name and let WordPress make the scaled copy and the thumbnails again
+		$metadata = wp_get_attachment_metadata($attachment_id);
+		if (is_array($metadata) && !empty($metadata['original_image']) && is_string($metadata['original_image'])) {
+			$file_path = dirname($file_path) . '/' . wp_basename($metadata['original_image']);
 		}
 
 		wp_mkdir_p(dirname($file_path));
 
-		if (!@copy($tmp_file, $file_path)) {
-			@unlink($tmp_file);
+		if (!copy($tmp_file, $file_path)) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy -- same-server copy of a download_url() temp file
+			wp_delete_file($tmp_file);
 			return new WP_Error('yis_copy_failed', __('Could not write the file back to local storage - check directory permissions.', 'yourimageshare-media-offload'));
 		}
-		@unlink($tmp_file);
+		wp_delete_file($tmp_file);
+		update_attached_file($attachment_id, $file_path);
 
 		delete_post_meta($attachment_id, YIS_Media::META_URL);
 		delete_post_meta($attachment_id, YIS_Media::META_ID);
 		delete_post_meta($attachment_id, YIS_Media::META_TYPE);
 		delete_post_meta($attachment_id, YIS_Media::META_WIDTH);
 		delete_post_meta($attachment_id, YIS_Media::META_HEIGHT);
+		delete_post_meta($attachment_id, YIS_Media::META_THUMB);
 		delete_post_meta($attachment_id, '_yis_local_deleted');
+		delete_post_meta($attachment_id, YIS_Media::META_FAILED);
 
 		// Regenerating metadata re-fires wp_generate_attachment_metadata,
 		// which YIS_Media also listens on - without removing that filter
@@ -107,12 +120,19 @@ class YIS_Restore {
 			wp_update_attachment_metadata($attachment_id, $metadata);
 		}
 
-		if ($delete_remote_after && $remote_id) {
-			$full_key = get_option('yis_offload_full_key', '');
-			YIS_API_Client::delete($remote_id, $full_key);
-		}
-
 		YIS_Notices::clear_failure($attachment_id);
+
+		if ($delete_remote_after && $remote_id) {
+			$deleted = YIS_API_Client::delete($remote_id, get_option('yis_offload_full_key', ''));
+			if (is_wp_error($deleted)) {
+				// the file is back locally either way; say why the remote copy is still there
+				return new WP_Error('yis_restored_remote_kept', sprintf(
+					/* translators: %s: reason the remote delete failed */
+					__('Restored to local storage, but the copy on YourImageShare was kept: %s', 'yourimageshare-media-offload'),
+					$deleted->get_error_message()
+				));
+			}
+		}
 
 		return true;
 	}

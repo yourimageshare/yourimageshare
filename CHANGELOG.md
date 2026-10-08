@@ -12,6 +12,31 @@ per-package release notes.
 
 ## [Unreleased]
 
+- **API: files up to 200 MB in pieces.** New `POST /api/chunk` takes 5 MB
+  pieces (`upload_id`, `index`, `total`, `chunk`); finish with `POST /api`
+  and `upload_id` + `filename`. Gets past the 100 MB per-request cap, which
+  previously only `url` uploads could. Pieces have their own limit (300 a
+  minute per key) and only the finishing request counts as an upload.
+- **API: richer upload/list responses.** New fields `thumb` (280 px WebP),
+  `width`, `height`, `size`, `locked`, and on uploads `duplicate`. `path`
+  is now documented as changing after conversion - store `src`.
+- **API: duplicate uploads are reused.** The exact same file uploaded again
+  by the same account returns the existing upload with `duplicate: true`
+  (not for expiring uploads; `allow_duplicate=1` opts out).
+- **API: Upload-only keys get 2,000 uploads a day** (full keys stay at 500).
+- **Direct file links are cacheable:** `/ib/<id>.<ext>` for a public file
+  now redirects to its stable `i.yourimageshare.com` URL (cached for an
+  hour; a minute while a new upload may still be converted) instead of a
+  signed URL that changed every 4 minutes.
+- **WordPress plugin 1.2.0/1.3.0** - see its readme changelog: permanent
+  `src` links (1.1.0 links broke after WebP conversion), post content
+  rewritten after bulk offload, thumbnails + srcset, background bulk
+  offload via WP-Cron, `wp yis` CLI commands, chunked uploads up to 200 MB,
+  WordPress.org Plugin Check clean, tested with WordPress 7.1.
+- Docs: `API.md`, `openapi.yaml`/`openapi.json` and `/about/api` updated for
+  all of the above (`API.md` also gained the existing `url` field and the
+  full list of accepted formats). **SDKs not updated yet.**
+
 - **The `X-API-Key` header now takes precedence over `?key=`** when both
   are present (previously the query parameter won). `?key=` still works
   as a fallback for older integrations - this only changes which one is

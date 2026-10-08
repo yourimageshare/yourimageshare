@@ -27,3 +27,6 @@ delete_option('yis_offload_delete_remote_on_trash');
 delete_option('yis_offload_bytes_saved');
 delete_option('yis_offload_files_offloaded');
 delete_option('yis_offload_recent_failures');
+delete_post_meta_by_key('_yis_offload_failed');
+delete_option('yis_offload_bulk_state');
+wp_clear_scheduled_hook('yis_offload_bulk_tick');

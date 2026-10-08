@@ -1,12 +1,11 @@
 openapi: 3.0.3
 info:
   title: YourImageShare API
-  description: >
-    Free JSON/REST API for YourImageShare - upload, list, and delete
-    images/videos programmatically. See https://yourimageshare.com/about/api
-    for the human-readable docs and API.md in this repo for the full
-    reference.
-  version: "1.0"
+  description: 'Free JSON/REST API for YourImageShare - upload, list, and delete images/videos programmatically. See https://yourimageshare.com/about/api
+    for the human-readable docs and API.md in this repo for the full reference.
+
+    '
+  version: '1.0'
   contact:
     name: YourImageShare
     url: https://yourimageshare.com/contact
@@ -14,39 +13,58 @@ info:
     name: MIT
     url: https://github.com/MediaShareORG/yourimageshare/blob/main/LICENSE
 servers:
-  - url: https://yourimageshare.com/api
-    description: Production
-
+- url: https://yourimageshare.com/api
+  description: Production
 security:
-  - apiKeyHeader: []
-  - apiKeyQuery: []
-
+- apiKeyHeader: []
+- apiKeyQuery: []
 paths:
   /:
     post:
       operationId: uploadFile
       summary: Upload a file
-      description: Uploads a single file for the authenticated account. One file per request.
+      description: Upload an image or video and get back a permanent direct file URL, a page link, a thumbnail, dimensions
+        and size. Accepts JPG, PNG, GIF, WEBP, AVIF, BMP, TIFF, HEIC or HEIF images, or MP4, WEBM, AVI, MOV, M4V, MKV, MPEG,
+        WMV, FLV or 3GP video, up to 200MB. Send the file in "uploads" (up to 100MB, the per-request limit of our network),
+        a public link in "url" (the server downloads it), or an "upload_id" for a file sent in pieces to POST /chunk. Uploading
+        the exact same file again from the same account returns the existing upload with duplicate=true.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [uploads]
               properties:
                 uploads:
                   type: string
                   format: binary
-                  description: The file to upload (image or video).
+                  description: The file to upload, up to 100MB. Required unless "url" or "upload_id" is sent.
                 expires_in:
                   type: integer
                   minimum: 60
                   maximum: 2592000
-                  description: >
-                    Auto-delete this upload after this many seconds (60 to
-                    2,592,000, i.e. 1 minute to 30 days). Omit for a
-                    permanent upload.
+                  description: 'Auto-delete this upload after this many seconds (60 to 2,592,000, i.e. 1 minute to 30 days).
+                    Omit for a permanent upload.
+
+                    '
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2048
+                  description: A public http(s) link to an image or video, downloaded by the server (up to 200MB).
+                upload_id:
+                  type: string
+                  pattern: ^[a-f0-9]{32}$
+                  description: 'Finish a chunked upload: the id used for its pieces on POST /chunk (up to 200MB).'
+                filename:
+                  type: string
+                  maxLength: 255
+                  description: 'With upload_id: the original file name.'
+                allow_duplicate:
+                  type: boolean
+                  description: Store a new copy even if this account already uploaded the exact same file.
+              description: 'Send one of: "uploads" (a file, up to 100MB), "url" (a link, up to 200MB) or "upload_id" (pieces
+                sent to POST /chunk, up to 200MB).'
       responses:
         '200':
           description: Upload succeeded.
@@ -64,31 +82,35 @@ paths:
                   src: https://yourimageshare.com/ib/aB3xY9qRz1.webp
                   direct: https://yourimageshare.com/ib/aB3xY9qRz1
                   expires_at: null
-        '401':
+        '401': &id001
           $ref: '#/components/responses/Unauthorized'
-        '403':
+        '403': &id002
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
-        '429':
+        '429': &id003
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerError'
+        '413':
+          description: The request body is over 100MB (rejected by the network edge). Send the file in pieces (POST /chunk)
+            or as a "url".
     get:
       operationId: listUploads
       summary: List your uploads
-      description: >
-        Returns a paginated list of the authenticated account's uploads
-        (from any source), newest first, 50 per page.
+      description: 'Returns a paginated list of the authenticated account''s uploads (from any source), newest first, 50 per
+        page.
+
+        '
       parameters:
-        - name: page
-          in: query
-          required: false
-          description: Page number, defaults to 1.
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
+      - name: page
+        in: query
+        required: false
+        description: Page number, defaults to 1.
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
       responses:
         '200':
           description: List of uploads.
@@ -104,21 +126,20 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerError'
-
   /{id}:
     delete:
       operationId: deleteUpload
       summary: Delete an upload
-      description: >
-        Permanently deletes one of the authenticated account's uploads.
-        Cannot be undone from the API.
+      description: 'Permanently deletes one of the authenticated account''s uploads. Cannot be undone from the API.
+
+        '
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The upload's id, as returned by the upload or list endpoints.
-          schema:
-            type: string
+      - name: id
+        in: path
+        required: true
+        description: The upload's id, as returned by the upload or list endpoints.
+        schema:
+          type: string
       responses:
         '200':
           description: Deleted.
@@ -139,32 +160,91 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerError'
-
+  /chunk:
+    post:
+      operationId: uploadChunk
+      summary: Send one piece of a large file
+      description: 'For files over 100MB (up to 200MB) or slow connections: send the file in pieces of at most 5MB with the
+        same 32-hex-character upload_id, index 0..total-1, then call POST / with upload_id and filename. Unfinished uploads
+        are deleted after 2 hours. Only the finishing POST / counts toward the upload rate limits (pieces: 300 a minute per
+        key).'
+      security:
+      - ApiKeyHeader: []
+      - ApiKeyQuery: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - upload_id
+              - index
+              - total
+              - chunk
+              properties:
+                upload_id:
+                  type: string
+                  pattern: ^[a-f0-9]{32}$
+                  description: 32 random hex characters, the same for every piece of one file.
+                index:
+                  type: integer
+                  minimum: 0
+                  description: 0-based piece number.
+                total:
+                  type: integer
+                  minimum: 1
+                  maximum: 40
+                  description: Number of pieces.
+                chunk:
+                  type: string
+                  format: binary
+                  description: The bytes of this piece, at most 5MB.
+      responses:
+        '200':
+          description: Piece stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                    - success
+                  chunk_size:
+                    type: integer
+                    example: 5242880
+        '401': *id001
+        '403': *id002
+        '422':
+          description: Invalid piece, too many unfinished uploads, or uploads temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429': *id003
 components:
   securitySchemes:
     apiKeyQuery:
       type: apiKey
       in: query
       name: key
-      description: >
-        Your account's API key or upload-only key (My account > API tab).
-        The full API key can upload, list, and delete. The upload-only key
-        can only upload - list/delete reject it with 401. Use the
-        upload-only key anywhere the value ends up visible to others (e.g.
-        embedded in a page), and the full key only in trusted server-side
-        code. Kept as a fallback for older integrations; prefer the
-        X-API-Key header below where you can. If both are present, the
+      description: 'Your account''s API key or upload-only key (My account > API tab). The full API key can upload, list,
+        and delete. The upload-only key can only upload - list/delete reject it with 401. Use the upload-only key anywhere
+        the value ends up visible to others (e.g. embedded in a page), and the full key only in trusted server-side code.
+        Kept as a fallback for older integrations; prefer the X-API-Key header below where you can. If both are present, the
         header wins.
+
+        '
     apiKeyHeader:
       type: apiKey
       in: header
       name: X-API-Key
-      description: >
-        Same as the `key` query parameter above (full key or upload-only
-        key). Preferred over the query parameter, since query strings tend
-        to end up in access/proxy logs and Referer headers. If both are
-        present, this header wins.
+      description: 'Same as the `key` query parameter above (full key or upload-only key). Preferred over the query parameter,
+        since query strings tend to end up in access/proxy logs and Referer headers. If both are present, this header wins.
 
+        '
   schemas:
     Upload:
       type: object
@@ -175,18 +255,21 @@ components:
           example: aB3xY9qRz1
         type:
           type: string
-          enum: [image, video]
+          enum:
+          - image
+          - video
         title:
           type: string
           nullable: true
         path:
           type: string
           format: uri
-          description: The raw storage URL of the uploaded file.
+          description: The storage URL of the file as uploaded. It can change shortly afterwards when the file is converted
+            (WebP/MP4) - store src instead.
         src:
           type: string
           format: uri
-          description: Direct file URL, suitable for an <img>/<video> src.
+          description: 'Permanent direct file URL: always opens the current file. Use it for <img>/<video> src and store it.'
         direct:
           type: string
           format: uri
@@ -200,26 +283,57 @@ components:
           type: string
           format: date-time
           description: Only present on list responses.
-      required: [id, type, path, src, direct]
-
+        thumb:
+          type: string
+          format: uri
+          description: 'A 280px wide WebP thumbnail (a video: its first frame), or null.'
+          nullable: true
+        width:
+          type: integer
+          description: Display width in pixels, or null if unknown.
+          nullable: true
+        height:
+          type: integer
+          description: Display height in pixels, or null if unknown.
+          nullable: true
+        size:
+          type: integer
+          description: File size in bytes as stored.
+          nullable: true
+        locked:
+          type: boolean
+          description: True if the upload is password-protected.
+        duplicate:
+          type: boolean
+          description: 'Upload response only: true if this account had already uploaded the exact same file and that upload
+            was returned instead of a new one.'
+      required:
+      - id
+      - type
+      - path
+      - src
+      - direct
     UploadResponse:
       type: object
       properties:
         type:
           type: string
-          enum: [success]
+          enum:
+          - success
         msg:
           type: string
         data:
           $ref: '#/components/schemas/Upload'
-      required: [type, data]
-
+      required:
+      - type
+      - data
     ListResponse:
       type: object
       properties:
         type:
           type: string
-          enum: [success]
+          enum:
+          - success
         data:
           type: array
           items:
@@ -233,29 +347,35 @@ components:
               type: integer
             total:
               type: integer
-      required: [type, data, meta]
-
+      required:
+      - type
+      - data
+      - meta
     SuccessMessage:
       type: object
       properties:
         type:
           type: string
-          enum: [success]
+          enum:
+          - success
         msg:
           type: string
-      required: [type, msg]
-
+      required:
+      - type
+      - msg
     ErrorResponse:
       type: object
       properties:
         type:
           type: string
-          enum: [error]
+          enum:
+          - error
         errors:
           type: string
           description: Human-readable description of what went wrong.
-      required: [type, errors]
-
+      required:
+      - type
+      - errors
   responses:
     Unauthorized:
       description: Missing or invalid API key.
@@ -279,9 +399,10 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     ValidationError:
-      description: >
-        No file provided, an unsupported file type, unreadable image data,
-        or dimensions over the 30000x30000px limit.
+      description: 'No file provided, an unsupported file type, unreadable image data, or dimensions over the 30000x30000px
+        limit.
+
+        '
       content:
         application/json:
           schema:

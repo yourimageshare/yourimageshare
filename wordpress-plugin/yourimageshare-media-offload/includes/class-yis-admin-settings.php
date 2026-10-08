@@ -57,11 +57,19 @@ class YIS_Admin_Settings {
 			'nonce' => wp_create_nonce('yis_media_action'),
 			'i18n' => array(
 				'starting' => __('Starting…', 'yourimageshare-media-offload'),
-				'processing' => __('Offloading… %1$d done, %2$d remaining', 'yourimageshare-media-offload'),
-				'rateLimited' => __('Rate limit reached - pausing for a minute before continuing…', 'yourimageshare-media-offload'),
+				/* translators: 1: files offloaded so far, 2: files still to do */
+				'processing' => __('Offloading in the background… %1$d done, %2$d remaining. You can leave this page.', 'yourimageshare-media-offload'),
+				/* translators: %d: seconds until the run continues */
+				'rateLimited' => __('Per-minute API limit reached - continuing in %d seconds…', 'yourimageshare-media-offload'),
+				/* translators: 1: files offloaded so far, 2: hours until the limit resets */
+				'dailyLimit' => __('Daily API limit reached after %1$d files - the run continues automatically in about %2$d hours.', 'yourimageshare-media-offload'),
+				/* translators: 1: files offloaded, 2: files that failed */
 				'done' => __('Done. %1$d offloaded, %2$d failed.', 'yourimageshare-media-offload'),
-				'error' => __('Something went wrong - stopped. You can click Start again to resume.', 'yourimageshare-media-offload'),
-				'confirmStart' => __('Offload your entire existing Media Library to YourImageShare now? This can take a while for a large library and will use your API rate limit.', 'yourimageshare-media-offload'),
+				/* translators: 1: files offloaded, 2: files that failed */
+				'stopped' => __('Stopped. %1$d offloaded, %2$d failed. Click Start to continue.', 'yourimageshare-media-offload'),
+				'noKey' => __('Stopped: no upload key is configured.', 'yourimageshare-media-offload'),
+				'error' => __('Could not reach your site - retrying…', 'yourimageshare-media-offload'),
+				'confirmStart' => __('Offload your entire existing Media Library to YourImageShare now? It runs in the background and can take a while for a large library.', 'yourimageshare-media-offload'),
 			),
 		));
 	}
@@ -101,11 +109,11 @@ class YIS_Admin_Settings {
 				</p>
 				<p class="description">
 					<?php
-					printf(
+					echo esc_html(sprintf(
 						/* translators: %d: number of files offloaded */
-						esc_html(_n('%d file offloaded to YourImageShare.', '%d files offloaded to YourImageShare.', $files_offloaded, 'yourimageshare-media-offload')),
+						_n('%d file offloaded to YourImageShare.', '%d files offloaded to YourImageShare.', $files_offloaded, 'yourimageshare-media-offload'),
 						$files_offloaded
-					);
+					));
 					?>
 				</p>
 			</div>
@@ -116,13 +124,13 @@ class YIS_Admin_Settings {
 					<tr>
 						<th scope="row"><label for="yis_offload_upload_key"><?php esc_html_e('Upload-only key', 'yourimageshare-media-offload'); ?></label></th>
 						<td>
-							<input type="text" id="yis_offload_upload_key" name="yis_offload_upload_key" class="regular-text code" value="<?php echo esc_attr(get_option('yis_offload_upload_key', '')); ?>">
+							<input type="password" autocomplete="off" spellcheck="false" id="yis_offload_upload_key" name="yis_offload_upload_key" class="regular-text code" value="<?php echo esc_attr(get_option('yis_offload_upload_key', '')); ?>">
 							<p class="description">
 								<?php
 								printf(
-									/* translators: %s: link to the API key page */
 									wp_kses(
-										__('Required. Get this from the <strong>API</strong> tab at %s - it\'s the second key on that page, separate from your main API key. This key can only upload, never list or delete, which is why it\'s the right one to store here.', 'yourimageshare-media-offload'),
+										/* translators: %s: link to the API key page */
+										__('Required. Get this from the <strong>API</strong> tab at %s - it\'s the <strong>Upload-only key</strong>, the second key on that page, separate from your main API key. This key can only upload, never list or delete, which is why it\'s the right one to store here.', 'yourimageshare-media-offload'),
 										array('strong' => array())
 									),
 									'<a href="https://yourimageshare.com/my-account#api" target="_blank" rel="noopener">yourimageshare.com/my-account</a>'
@@ -153,7 +161,7 @@ class YIS_Admin_Settings {
 					<tr>
 						<th scope="row"><label for="yis_offload_full_key"><?php esc_html_e('Full API key', 'yourimageshare-media-offload'); ?></label></th>
 						<td>
-							<input type="text" id="yis_offload_full_key" name="yis_offload_full_key" class="regular-text code" value="<?php echo esc_attr(get_option('yis_offload_full_key', '')); ?>">
+							<input type="password" autocomplete="off" spellcheck="false" id="yis_offload_full_key" name="yis_offload_full_key" class="regular-text code" value="<?php echo esc_attr(get_option('yis_offload_full_key', '')); ?>">
 							<p class="description"><?php esc_html_e('Optional - only needed for "Delete remote copy" below, and for choosing to delete the remote file after restoring one to local storage. This key can list and delete your uploads, so only set it if you want that behavior; leave blank otherwise.', 'yourimageshare-media-offload'); ?></p>
 						</td>
 					</tr>
@@ -180,8 +188,10 @@ class YIS_Admin_Settings {
 			<?php else : ?>
 				<p>
 					<button type="button" class="button button-primary" id="yis-bulk-start"><?php esc_html_e('Start bulk offload', 'yourimageshare-media-offload'); ?></button>
+					<button type="button" class="button" id="yis-bulk-stop" style="display:none"><?php esc_html_e('Stop', 'yourimageshare-media-offload'); ?></button>
 					<span id="yis-bulk-status" style="margin-left:1em"></span>
 				</p>
+				<p class="description"><?php esc_html_e('Runs in the background with WP-Cron, so you can leave this page. Large libraries can also be offloaded from the command line: wp yis offload --all', 'yourimageshare-media-offload'); ?></p>
 				<div id="yis-bulk-progress" style="max-width:520px;background:#e0e0e0;border-radius:4px;height:10px;display:none;overflow:hidden;margin-top:.5em">
 					<div id="yis-bulk-progress-bar" style="background:#2271b1;height:100%;width:0"></div>
 				</div>
@@ -191,8 +201,9 @@ class YIS_Admin_Settings {
 
 			<h2><?php esc_html_e('What data leaves your site', 'yourimageshare-media-offload'); ?></h2>
 			<p class="description">
-				<?php esc_html_e('When an image or video is offloaded, the file itself is sent to YourImageShare (yourimageshare.com) over its public API, using the key configured above. No other site data - post content, user information, settings - is ever sent. See YourImageShare\'s own privacy policy for how uploaded files are handled on their end.', 'yourimageshare-media-offload'); ?>
-				<a href="https://yourimageshare.com/about/privacy-policy" target="_blank" rel="noopener"><?php esc_html_e('YourImageShare Privacy Policy', 'yourimageshare-media-offload'); ?></a>
+				<?php esc_html_e('When an image or video is offloaded, the file is sent to YourImageShare (yourimageshare.com) over its public API, using the key configured above. Files larger than 20 MB are sent in 5 MB pieces. No other site data - post content, user information, settings - is ever sent.', 'yourimageshare-media-offload'); ?>
+				<a href="https://yourimageshare.com/about/privacy-policy" target="_blank" rel="noopener"><?php esc_html_e('Privacy Policy', 'yourimageshare-media-offload'); ?></a> &middot;
+				<a href="https://yourimageshare.com/about/terms-and-conditions" target="_blank" rel="noopener"><?php esc_html_e('Terms and Conditions', 'yourimageshare-media-offload'); ?></a>
 			</p>
 		</div>
 		<?php
