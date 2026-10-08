@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "yourimageshare-mcp",
   "display_name": "YourImageShare",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "MCP server exposing the YourImageShare upload API (upload/list/delete) as tools for AI agents.",
   "long_description": "Lets an MCP-compatible AI agent (Claude Desktop, Claude Code, and other MCP clients) upload, list, and delete files on YourImageShare directly - \"upload this screenshot and give me a link\" as a tool call instead of a manual copy-paste-upload loop. Get an API key at yourimageshare.com/my-account under the API tab.",
   "author": {

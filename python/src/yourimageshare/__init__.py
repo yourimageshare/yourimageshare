@@ -10,7 +10,7 @@ from .client import (
     YourImageShareError,
 )
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 __all__ = [
     "YourImageShare",
     "YourImageShareError",

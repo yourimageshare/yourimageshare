@@ -15,7 +15,11 @@ defmodule YourImageShare.Client do
   alias YourImageShare.{APIError, ListResult, UploadResult}
 
   @default_base_url "https://yourimageshare.com/api"
-  @sdk_version "1.0.0"
+  @sdk_version "1.1.0"
+  # Files above this size are sent in pieces (one request can carry at most 100 MB).
+  @chunk_threshold 90 * 1024 * 1024
+  # Size of one piece of a chunked upload (the API accepts at most 5 MB).
+  @chunk_size 5 * 1024 * 1024
 
   defstruct [:api_key, :base_url, :req_options]
 
@@ -44,13 +48,115 @@ defmodule YourImageShare.Client do
   end
 
   @doc """
-  Uploads a local file by path. Streams from disk via `File.stream!/1` -
-  doesn't buffer the whole file in memory. `opts[:expires_in]` auto-deletes
-  the upload after that many seconds (60 to 2,592,000 = 30 days).
+  Uploads a local file by path (up to 200 MB). Streams from disk via
+  `File.stream!/3` - doesn't buffer the whole file in memory. Files over
+  90 MB are sent in 5 MB pieces automatically.
+
+  Options:
+    * `:expires_in` - auto-delete the upload after that many seconds
+      (60 to 2,592,000 = 30 days).
+    * `:allow_duplicate` - store a new copy even if your account already
+      uploaded this exact file (otherwise that upload is returned with
+      `duplicate: true`).
+    * `:on_progress` - `fn sent, total -> ... end`, called after each piece
+      of a chunked upload.
   """
   @spec upload(t(), Path.t(), keyword()) :: {:ok, UploadResult.t()} | {:error, APIError.t()}
   def upload(%__MODULE__{} = client, file_path, opts \\ []) do
-    upload_stream(client, File.stream!(file_path), Path.basename(file_path), opts)
+    case File.stat(file_path) do
+      {:ok, %File.Stat{size: size}} when size > @chunk_threshold ->
+        upload_chunked(client, file_path, size, opts)
+
+      _ ->
+        upload_stream(client, File.stream!(file_path), Path.basename(file_path), opts)
+    end
+  end
+
+  @doc """
+  Uploads from a public http(s) link: the server downloads the file itself
+  (up to 200 MB). Takes the same `:expires_in` / `:allow_duplicate` options.
+  """
+  @spec upload_url(t(), String.t(), keyword()) :: {:ok, UploadResult.t()} | {:error, APIError.t()}
+  def upload_url(%__MODULE__{} = client, url, opts \\ []) do
+    post_upload(client, [url: url], opts)
+  end
+
+  @doc "Same as `upload_url/3`, but raises instead of returning `{:error, _}`."
+  @spec upload_url!(t(), String.t(), keyword()) :: UploadResult.t()
+  def upload_url!(%__MODULE__{} = client, url, opts \\ []) do
+    bang!(upload_url(client, url, opts))
+  end
+
+  defp upload_chunked(client, file_path, size, opts) do
+    upload_id = Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
+    total = div(size + @chunk_size - 1, @chunk_size)
+    on_progress = Keyword.get(opts, :on_progress)
+
+    result =
+      file_path
+      |> File.stream!([], @chunk_size)
+      |> Stream.with_index()
+      |> Enum.reduce_while({:ok, 0}, fn {piece, index}, {:ok, sent} ->
+        fields = [
+          upload_id: upload_id,
+          index: Integer.to_string(index),
+          total: Integer.to_string(total),
+          chunk: {piece, filename: "piece"}
+        ]
+
+        case send_piece(client, fields, 1) do
+          :ok ->
+            sent = sent + byte_size(piece)
+            if is_function(on_progress, 2), do: on_progress.(sent, size)
+            {:cont, {:ok, sent}}
+
+          {:error, _} = error ->
+            {:halt, error}
+        end
+      end)
+
+    case result do
+      {:ok, _} ->
+        post_upload(client, [upload_id: upload_id, filename: Path.basename(file_path)], opts)
+
+      error ->
+        error
+    end
+  end
+
+  # network errors (status 0) and 5xx are retried; anything the server refused (4xx) is final
+  defp send_piece(client, fields, attempt) do
+    url = String.trim_trailing(client.base_url, "/") <> "/chunk"
+
+    case client |> request(:post, url, form_multipart: fields) |> decode(fn _ -> :ok end) do
+      {:ok, :ok} ->
+        :ok
+
+      {:error, %APIError{status: status}} when attempt < 3 and status not in 400..499 ->
+        send_piece(client, fields, attempt + 1)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp post_upload(client, fields, opts) do
+    client
+    |> request(:post, client.base_url,
+      form_multipart: fields ++ upload_fields(opts),
+      receive_timeout: 180_000
+    )
+    |> decode(fn %{"data" => data} -> UploadResult.from_map(data) end)
+  end
+
+  defp upload_fields(opts) do
+    expires_in = Keyword.get(opts, :expires_in)
+
+    if(is_integer(expires_in) and expires_in > 0,
+      do: [expires_in: Integer.to_string(expires_in)],
+      else: []
+    ) ++
+      if(Keyword.get(opts, :allow_duplicate), do: [allow_duplicate: "1"], else: [])
   end
 
   @doc "Same as `upload/3`, but raises `YourImageShare.APIError` instead of returning `{:error, _}`."
@@ -68,18 +174,7 @@ defmodule YourImageShare.Client do
   @spec upload_stream(t(), Enumerable.t(), String.t(), keyword()) ::
           {:ok, UploadResult.t()} | {:error, APIError.t()}
   def upload_stream(%__MODULE__{} = client, stream, filename, opts \\ []) do
-    expires_in = Keyword.get(opts, :expires_in)
-
-    fields =
-      [uploads: {stream, filename: filename}] ++
-        if(is_integer(expires_in) and expires_in > 0,
-          do: [expires_in: Integer.to_string(expires_in)],
-          else: []
-        )
-
-    client
-    |> request(:post, client.base_url, form_multipart: fields)
-    |> decode(fn %{"data" => data} -> UploadResult.from_map(data) end)
+    post_upload(client, [uploads: {stream, filename: filename}], opts)
   end
 
   @doc "Same as `upload_stream/4`, but raises instead of returning `{:error, _}`."
@@ -108,15 +203,22 @@ defmodule YourImageShare.Client do
   @doc "Removes one of your uploads by id. Returns `{:error, %APIError{}}` on a 404/401."
   @spec delete(t(), String.t()) :: :ok | {:error, APIError.t()}
   def delete(%__MODULE__{} = client, id) do
-    client
-    |> request(:delete, client.base_url <> "/" <> URI.encode_www_form(id))
-    |> decode(fn _ -> :ok end)
+    # decode/2 wraps success in {:ok, _}; delete is documented (and specced) to return a bare :ok
+    case client
+         |> request(:delete, client.base_url <> "/" <> URI.encode_www_form(id))
+         |> decode(fn _ -> :ok end) do
+      {:ok, :ok} -> :ok
+      {:error, _} = error -> error
+    end
   end
 
   @doc "Same as `delete/2`, but raises instead of returning `{:error, _}`."
   @spec delete!(t(), String.t()) :: :ok
   def delete!(%__MODULE__{} = client, id) do
-    bang!(delete(client, id))
+    case delete(client, id) do
+      :ok -> :ok
+      {:error, %APIError{} = error} -> raise error
+    end
   end
 
   defp request(%__MODULE__{} = client, method, url, extra \\ []) do

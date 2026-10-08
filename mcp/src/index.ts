@@ -22,11 +22,22 @@ const client = new YourImageShareClient(apiKey ?? '', process.env.YIS_BASE_URL ?
 const server = new McpServer({
   name: 'yourimageshare',
   title: 'YourImageShare',
-  version: '1.0.6',
+  version: '1.1.0',
   description:
     'Upload, list, and delete images and videos on YourImageShare (free hosting, 200MB limit, no account required for end viewers) and get back a shareable link.',
   websiteUrl: 'https://yourimageshare.com',
 });
+
+/** Only the fields declared in the output schemas: MCP clients reject structured content with fields the
+ *  schema doesn't list, so a field the API adds later must not reach them unannounced. */
+const LINK_FIELDS = ['id', 'type', 'path', 'src', 'direct', 'thumb', 'width', 'height', 'size', 'locked', 'expires_at'] as const;
+function pick(item: Record<string, unknown>, extra: string[]) {
+  const out: Record<string, unknown> = {};
+  for (const key of [...LINK_FIELDS, ...extra]) {
+    if (item[key] !== undefined) out[key] = item[key];
+  }
+  return out;
+}
 
 function errorResult(err: unknown) {
   const message = err instanceof YourImageShareApiError ? `${err.message} (HTTP ${err.status})` : String(err);
@@ -39,13 +50,20 @@ function errorResult(err: unknown) {
 const uploadFields = {
   id: z.string().describe('Unique identifier for this upload. Pass to delete_upload to remove it.'),
   type: z.enum(['image', 'video']),
-  path: z.string().describe('Raw storage URL - the literal file, e.g. i.yourimageshare.com/xxx.webp.'),
-  src: z.string().describe('Direct/embeddable file URL - use this for <img>/<video> src attributes.'),
+  path: z
+    .string()
+    .describe('Storage URL of the file as uploaded. It can change shortly afterwards when the file is converted (WebP/MP4) - store `src` instead.'),
+  src: z.string().describe('Permanent direct/embeddable file URL - use this for <img>/<video> src attributes and when saving the link.'),
   direct: z
     .string()
     .describe(
       'The shareable page URL (title, description, comments, share buttons). Despite the field name, this is NOT a direct file link - use `src` for that.',
     ),
+  thumb: z.string().nullable().optional().describe('280px wide WebP thumbnail (for a video, its first frame), or null.'),
+  width: z.number().nullable().optional().describe('Width in pixels, or null if unknown.'),
+  height: z.number().nullable().optional().describe('Height in pixels, or null if unknown.'),
+  size: z.number().nullable().optional().describe('File size in bytes as stored.'),
+  locked: z.boolean().optional().describe('True if the upload is password-protected.'),
   expires_at: z.string().nullable().describe('ISO 8601 auto-delete timestamp, or null if the upload never expires.'),
 };
 
@@ -55,9 +73,10 @@ server.registerTool(
     title: 'Upload an image or video',
     description:
       'Upload an image or video to YourImageShare and get back a shareable link. Accepts JPG, PNG, GIF, WEBP, ' +
-      'AVIF, BMP, TIFF, HEIC/HEIF images and MP4, WEBM, AVI video, 100KB-200MB. Provide `path` for a file on ' +
-      'disk this server can read, or `base64` + `filename` for in-memory content (e.g. no local filesystem ' +
-      'access) - never both. Returns three different URLs for the same upload (see output fields): a raw ' +
+      'AVIF, BMP, TIFF, HEIC/HEIF images and MP4, WEBM, AVI, MOV, M4V, MKV, MPEG, WMV, FLV, 3GP video, up to 200MB ' +
+      '(large files are sent in pieces automatically). Provide exactly one of: `path` for a file on disk this ' +
+      'server can read, `base64` + `filename` for in-memory content, or `url` for a public link the server ' +
+      'downloads itself. Uploading a file your account already uploaded returns that upload with `duplicate: true`. Returns three different URLs for the same upload (see output fields): a raw ' +
       "storage link, a direct embeddable link, and a shareable page link - pick whichever fits where it's " +
       'going. Errors (oversized/unsupported file, bad API key, rate limit) come back as a normal tool error, ' +
       'not a thrown exception.',
@@ -65,6 +84,11 @@ server.registerTool(
       path: z.string().optional().describe('Local file path to upload.'),
       base64: z.string().optional().describe('Base64-encoded file contents. Requires `filename`.'),
       filename: z.string().optional().describe('Filename to use. Required with `base64`; inferred from `path` otherwise.'),
+      url: z.string().url().optional().describe('Public http(s) link to an image or video; the server downloads it (up to 200MB).'),
+      allowDuplicate: z
+        .boolean()
+        .optional()
+        .describe('Store a new copy even if this account already uploaded the exact same file.'),
       expiresIn: z
         .number()
         .int()
@@ -73,7 +97,10 @@ server.registerTool(
         .optional()
         .describe('Auto-delete after this many seconds (60 to 2,592,000 = 30 days). Omit for a permanent upload.'),
     },
-    outputSchema: uploadFields,
+    outputSchema: {
+      ...uploadFields,
+      duplicate: z.boolean().optional().describe('True if this exact file was already on your account and that upload was returned.'),
+    },
     annotations: {
       title: 'Upload an image or video',
       readOnlyHint: false,
@@ -82,13 +109,16 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ path, base64, filename, expiresIn }) => {
+  async ({ path, base64, filename, url, expiresIn, allowDuplicate }) => {
     try {
       let blob: Blob;
       let name: string;
 
-      if (path && base64) {
-        return { content: [{ type: 'text', text: 'Error: provide only one of `path` or `base64`, not both.' }], isError: true };
+      if ([path, base64, url].filter((v) => v !== undefined).length > 1) {
+        return { content: [{ type: 'text', text: 'Error: provide only one of `path`, `base64` or `url`.' }], isError: true };
+      } else if (url) {
+        const result = pick({ ...(await client.uploadFromUrl(url, { expiresIn, allowDuplicate })) }, ['duplicate']);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
       } else if (path) {
         const buffer = await readFile(path);
         blob = new Blob([buffer as unknown as BlobPart]);
@@ -100,10 +130,10 @@ server.registerTool(
         blob = new Blob([Buffer.from(base64, 'base64') as unknown as BlobPart]);
         name = filename;
       } else {
-        return { content: [{ type: 'text', text: 'Error: provide either `path` or `base64` + `filename`.' }], isError: true };
+        return { content: [{ type: 'text', text: 'Error: provide `path`, `base64` + `filename`, or `url`.' }], isError: true };
       }
 
-      const result = await client.upload(blob, name, expiresIn);
+      const result = pick({ ...(await client.upload(blob, name, { expiresIn, allowDuplicate })) }, ['duplicate']);
       return {
         content: [
           {
@@ -111,7 +141,7 @@ server.registerTool(
             text: JSON.stringify(result, null, 2),
           },
         ],
-        structuredContent: { ...result },
+        structuredContent: result,
       };
     } catch (err) {
       return errorResult(err);
@@ -155,8 +185,12 @@ server.registerTool(
   },
   async ({ page }) => {
     try {
-      const result = await client.list(page ?? 1);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: { ...result } };
+      const raw = await client.list(page ?? 1);
+      const result = {
+        data: raw.data.map((item) => pick({ ...item }, ['title', 'created_at'])),
+        meta: { current_page: raw.meta.current_page, last_page: raw.meta.last_page, total: raw.meta.total },
+      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
     } catch (err) {
       return errorResult(err);
     }

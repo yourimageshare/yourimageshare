@@ -1,12 +1,23 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
 import 'errors.dart';
+import 'file_io_stub.dart' if (dart.library.io) 'file_io.dart';
 import 'types.dart';
 
 const _defaultBaseUrl = 'https://yourimageshare.com/api';
-const _sdkVersion = '1.0.0';
+const _sdkVersion = '1.1.0';
+
+/// Files above this size are sent in pieces (one request can carry at most 100 MB).
+const _chunkThreshold = 90 * 1024 * 1024;
+
+/// Size of one piece of a chunked upload (the API accepts at most 5 MB).
+const _chunkSize = 5 * 1024 * 1024;
+
+/// Called after each piece of a chunked upload with the bytes sent so far and the total.
+typedef ProgressCallback = void Function(int sent, int total);
 
 /// Official Dart/Flutter client for the YourImageShare upload API
 /// (https://yourimageshare.com/about/api). Mirrors the existing JS, Python,
@@ -34,36 +45,127 @@ class YourImageShareClient {
     }
   }
 
-  /// Uploads a local file by path. Streams from disk via
+  /// Uploads a local file by path (up to 200 MB). Streams from disk via
   /// `http.MultipartFile.fromPath` - doesn't buffer the whole file in
-  /// memory first. [expiresIn] auto-deletes the upload after this many
-  /// seconds (60 to 2,592,000 = 30 days); omit for a permanent upload.
-  Future<UploadResult> upload(String filePath, {int? expiresIn}) async {
+  /// memory first; files over 90 MB are sent in 5 MB pieces automatically.
+  /// [expiresIn] auto-deletes the upload after this many seconds (60 to
+  /// 2,592,000 = 30 days); omit for a permanent upload. If your account
+  /// already uploaded this exact file, that upload is returned with
+  /// `duplicate == true` - pass [allowDuplicate] to store a new copy.
+  Future<UploadResult> upload(
+    String filePath, {
+    int? expiresIn,
+    bool allowDuplicate = false,
+    ProgressCallback? onProgress,
+  }) async {
+    final size = await fileLength(filePath);
+    final name = filePath.split(RegExp(r'[/\\]')).last;
+    if (size > _chunkThreshold) {
+      final uploadId = await _sendChunks(
+          size, (start, end) => readRange(filePath, start, end), onProgress);
+      return _finish(uploadId, name, expiresIn, allowDuplicate);
+    }
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.files.add(await http.MultipartFile.fromPath('uploads', filePath));
-    if (expiresIn != null && expiresIn > 0) {
-      request.fields['expires_in'] = expiresIn.toString();
-    }
+    _addOptions(request, expiresIn, allowDuplicate);
     return _sendUpload(request);
   }
 
   /// Uploads from raw bytes - useful when the data isn't already a file on
   /// disk (e.g. a network response, an in-memory buffer). [filename]
   /// should include a real extension so the server can infer the content
-  /// type correctly.
+  /// type correctly. Over 90 MB the bytes are sent in 5 MB pieces.
   Future<UploadResult> uploadBytes(
     List<int> bytes,
     String filename, {
     int? expiresIn,
+    bool allowDuplicate = false,
+    ProgressCallback? onProgress,
   }) async {
+    if (bytes.length > _chunkThreshold) {
+      final uploadId = await _sendChunks(bytes.length,
+          (start, end) async => bytes.sublist(start, end), onProgress);
+      return _finish(uploadId, filename, expiresIn, allowDuplicate);
+    }
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.files.add(
       http.MultipartFile.fromBytes('uploads', bytes, filename: filename),
     );
+    _addOptions(request, expiresIn, allowDuplicate);
+    return _sendUpload(request);
+  }
+
+  /// Uploads from a public http(s) link: the server downloads the file
+  /// itself (up to 200 MB).
+  Future<UploadResult> uploadUrl(
+    String url, {
+    int? expiresIn,
+    bool allowDuplicate = false,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
+    request.fields['url'] = url;
+    _addOptions(request, expiresIn, allowDuplicate);
+    return _sendUpload(request);
+  }
+
+  void _addOptions(
+      http.MultipartRequest request, int? expiresIn, bool allowDuplicate) {
     if (expiresIn != null && expiresIn > 0) {
       request.fields['expires_in'] = expiresIn.toString();
     }
+    if (allowDuplicate) {
+      request.fields['allow_duplicate'] = '1';
+    }
+  }
+
+  Future<UploadResult> _finish(
+      String uploadId, String filename, int? expiresIn, bool allowDuplicate) {
+    final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
+    request.fields['upload_id'] = uploadId;
+    request.fields['filename'] = filename;
+    _addOptions(request, expiresIn, allowDuplicate);
     return _sendUpload(request);
+  }
+
+  Future<String> _sendChunks(
+    int size,
+    Future<List<int>> Function(int start, int end) read,
+    ProgressCallback? onProgress,
+  ) async {
+    final random = Random.secure();
+    final uploadId = List.generate(
+            16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'))
+        .join();
+    final total = (size + _chunkSize - 1) ~/ _chunkSize;
+    final chunkUri = Uri.parse(
+        '${_baseUrl.endsWith('/') ? _baseUrl.substring(0, _baseUrl.length - 1) : _baseUrl}/chunk');
+
+    for (var index = 0; index < total; index++) {
+      final start = index * _chunkSize;
+      final end = min(start + _chunkSize, size);
+      final piece = await read(start, end);
+      for (var attempt = 1;; attempt++) {
+        final request = http.MultipartRequest('POST', chunkUri)
+          ..fields['upload_id'] = uploadId
+          ..fields['index'] = index.toString()
+          ..fields['total'] = total.toString()
+          ..files.add(
+              http.MultipartFile.fromBytes('chunk', piece, filename: 'piece'));
+        _setCommonHeaders(request);
+        try {
+          final response =
+              await http.Response.fromStream(await _httpClient.send(request));
+          _decodeOrThrow(response);
+          break;
+        } catch (e) {
+          // network errors and 5xx are retried; anything the server refused (4xx) is final
+          final status = e is YourImageShareException ? e.status : 0;
+          if (attempt >= 3 || (status >= 400 && status < 500)) rethrow;
+        }
+      }
+      onProgress?.call(end, size);
+    }
+    return uploadId;
   }
 
   Future<UploadResult> _sendUpload(http.MultipartRequest request) async {

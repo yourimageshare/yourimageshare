@@ -49,6 +49,26 @@ Enum.each(listing.data, fn item -> IO.puts("#{item.id} #{item.direct}") end)
 YourImageShare.Client.delete(client, result.id)
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```elixir
+{:ok, result} =
+  YourImageShare.Client.upload(client, "video.mp4",
+    on_progress: fn sent, total -> IO.puts("#{div(sent * 100, total)}%") end
+  )
+
+result.thumb
+#=> "https://i.yourimageshare.com/thumb-aB3xY9qRz1.webp"
+
+# a fresh copy even if this exact file is already on your account
+YourImageShare.Client.upload(client, "photo.jpg", allow_duplicate: true)
+
+# let the server download a public link (up to 200 MB)
+YourImageShare.Client.upload_url(client, "https://example.com/photo.jpg")
+```
+
 ### Error handling
 
 Every function returns `{:ok, result} | {:error, %YourImageShare.APIError{}}`

@@ -47,6 +47,22 @@ Future<void> main() async {
 }
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```dart
+final result = await client.upload('video.mp4',
+    onProgress: (sent, total) => print('${sent * 100 ~/ total}%'));
+print('${result.src} ${result.thumb} ${result.width} ${result.duplicate}');
+
+// a fresh copy even if this exact file is already on your account
+await client.upload('photo.jpg', allowDuplicate: true);
+
+// let the server download a public link (up to 200 MB)
+await client.uploadUrl('https://example.com/photo.jpg');
+```
+
 ### Error handling
 
 Failed requests throw a `YourImageShareException` (`.status` is the HTTP

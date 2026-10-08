@@ -1,5 +1,5 @@
 name: yourimageshare
-version: 1.0.0
+version: 1.1.0
 description: >-
   Official Dart/Flutter client for the YourImageShare upload API - upload,
   list, and delete files at https://yourimageshare.com.

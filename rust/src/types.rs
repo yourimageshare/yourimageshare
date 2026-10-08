@@ -7,10 +7,30 @@ pub struct UploadResult {
     pub id: String,
     #[serde(rename = "type")]
     pub kind: String,
+    /// Storage URL of the file as uploaded. It can change shortly afterwards
+    /// when the file is converted (WebP/MP4) - store `src`.
     pub path: String,
+    /// Permanent direct file URL - always opens the current file.
     pub src: String,
     pub direct: String,
+    /// 280 px wide WebP thumbnail (a video's first frame).
+    #[serde(default)]
+    pub thumb: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// File size in bytes as stored.
+    #[serde(default)]
+    pub size: Option<u64>,
+    /// True if the upload is password-protected.
+    #[serde(default)]
+    pub locked: bool,
     pub expires_at: Option<String>,
+    /// True if your account had already uploaded this exact file and that
+    /// upload was returned instead of a new one.
+    #[serde(default)]
+    pub duplicate: bool,
 }
 
 /// One row of a `list()` result.
@@ -23,6 +43,16 @@ pub struct ListedUpload {
     pub path: String,
     pub src: String,
     pub direct: String,
+    #[serde(default)]
+    pub thumb: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub size: Option<u64>,
+    #[serde(default)]
+    pub locked: bool,
     pub expires_at: Option<String>,
     pub created_at: String,
 }

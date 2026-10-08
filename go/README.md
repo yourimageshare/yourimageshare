@@ -62,6 +62,28 @@ func main() {
 }
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```go
+result, err := client.Upload("video.mp4", &yourimageshare.UploadOptions{
+	OnProgress: func(sent, total int64) { fmt.Printf("%d%%\n", sent*100/total) },
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(result.Src, *result.Thumb, *result.Width, result.Duplicate)
+
+// a fresh copy even if this exact file is already on your account
+client.Upload("photo.jpg", &yourimageshare.UploadOptions{AllowDuplicate: true})
+
+// let the server download a public link (up to 200 MB)
+client.UploadURL("https://example.com/photo.jpg", nil)
+```
+
+Pieces are only used by `Upload()` (a path, so the size is known); `UploadReader()` always sends one request.
+
 ### Error handling
 
 Failed requests return a `*yourimageshare.APIError` (`.Status` is the
@@ -90,7 +112,7 @@ timeout or transport. Defaults to a 30s timeout.
 Streams the file from disk (doesn't buffer the whole thing in memory -
 uploads can be up to 200MB). `opts.ExpiresIn` is seconds, 60 to 2,592,000
 (30 days); nil or zero means a permanent upload. Returns an `UploadResult`
-with `ID`, `Type`, `Path`, `Src`, `Direct`, `ExpiresAt`.
+with `ID`, `Type`, `Path`, `Src`, `Direct`, `Thumb`, `Width`, `Height`, `Size`, `Locked`, `ExpiresAt`, `Duplicate`.
 
 ### `client.UploadReader(r io.Reader, filename string, opts *UploadOptions) (*UploadResult, error)`
 
@@ -99,7 +121,7 @@ Same as `Upload`, but from any `io.Reader` instead of a file path.
 ### `client.List(page int) (*ListResult, error)`
 
 Returns a `ListResult` with `Data` (a slice of `ListedUpload` - `ID`,
-`Type`, `Title`, `Path`, `Src`, `Direct`, `ExpiresAt`, `CreatedAt`) and
+`Type`, `Title`, `Path`, `Src`, `Direct`, `Thumb`, `Width`, `Height`, `Size`, `Locked`, `ExpiresAt`, `CreatedAt`) and
 `Meta` (`ListMeta` - `CurrentPage`, `LastPage`, `Total`).
 
 ### `client.Delete(id string) error`

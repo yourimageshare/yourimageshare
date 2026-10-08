@@ -1,5 +1,9 @@
 const DEFAULT_BASE_URL = 'https://yourimageshare.com/api';
-const SDK_VERSION = '1.0.3';
+const SDK_VERSION = '1.1.0';
+/** Files above this size are sent in pieces (one request can carry at most 100 MB). */
+const CHUNK_THRESHOLD = 90 * 1024 * 1024;
+/** Size of one piece of a chunked upload (the API accepts at most 5 MB). */
+const CHUNK_SIZE = 5 * 1024 * 1024;
 /** Node's default `fetch` User-Agent is the bare string "node", which yourimageshare.com's
  *  bot-blocklist treats as a scanner and 403s. Identify the SDK explicitly instead. Only set
  *  in non-browser environments (`window` is absent) - browsers control their own UA header. */
@@ -17,27 +21,41 @@ export interface UploadOptions {
   expiresIn?: number;
   /** Filename to send when `file` is a Buffer/Uint8Array/ArrayBuffer rather than a File/Blob that already has one. */
   filename?: string;
+  /** Store a new copy even if your account already uploaded this exact file (otherwise the existing upload is returned with `duplicate: true`). */
+  allowDuplicate?: boolean;
+  /** Called after each piece of a chunked upload (files over 90 MB) with bytes sent so far and the total. */
+  onProgress?: (sent: number, total: number) => void;
 }
 
 export type UploadType = 'image' | 'video';
 
-export interface UploadResult {
+export interface Upload {
   id: string;
   type: UploadType;
+  /** Storage URL of the file as uploaded. It can change shortly afterwards when the file is converted (WebP/MP4) - store `src`. */
   path: string;
+  /** Permanent direct file URL - always opens the current file. */
   src: string;
+  /** The file's page on YourImageShare. */
   direct: string;
+  /** 280 px wide WebP thumbnail (a video's first frame), or null. */
+  thumb: string | null;
+  width: number | null;
+  height: number | null;
+  /** File size in bytes as stored. */
+  size: number | null;
+  /** True if the upload is password-protected. */
+  locked: boolean;
   expires_at: string | null;
 }
 
-export interface ListedUpload {
-  id: string;
-  type: UploadType;
+export interface UploadResult extends Upload {
+  /** True if your account had already uploaded this exact file and that upload was returned. */
+  duplicate: boolean;
+}
+
+export interface ListedUpload extends Upload {
   title: string | null;
-  path: string;
-  src: string;
-  direct: string;
-  expires_at: string | null;
   created_at: string;
 }
 
@@ -97,25 +115,78 @@ export class YourImageShare {
     return body as T;
   }
 
-  /**
-   * Upload a file. `file` accepts a browser File/Blob, or a raw Buffer/Uint8Array/ArrayBuffer
-   * (in which case pass `options.filename` so the server sees a real extension).
-   */
-  async upload(file: Blob | ArrayBuffer | Uint8Array, options: UploadOptions = {}): Promise<UploadResult> {
-    const blob = file instanceof Blob ? file : new Blob([file as BlobPart]);
-    const form = new FormData();
-    form.append('uploads', blob, options.filename ?? 'upload');
+  private uploadFields(form: FormData, options: UploadOptions): FormData {
     if (options.expiresIn !== undefined) {
       form.append('expires_in', String(options.expiresIn));
     }
+    if (options.allowDuplicate) {
+      form.append('allow_duplicate', '1');
+    }
+    return form;
+  }
 
-    const res = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: this.headers(),
-      body: form,
-    });
+  private async postUpload(form: FormData): Promise<UploadResult> {
+    const res = await fetch(this.baseUrl, { method: 'POST', headers: this.headers(), body: form });
     const body = await this.parseJson<{ data: UploadResult }>(res);
     return body.data;
+  }
+
+  /**
+   * Upload a file (up to 200 MB). `file` accepts a browser File/Blob, or a raw Buffer/Uint8Array/ArrayBuffer
+   * (in which case pass `options.filename` so the server sees a real extension). Files over 90 MB are sent
+   * in 5 MB pieces automatically.
+   */
+  async upload(file: Blob | ArrayBuffer | Uint8Array, options: UploadOptions = {}): Promise<UploadResult> {
+    const blob = file instanceof Blob ? file : new Blob([file as BlobPart]);
+    const filename = options.filename ?? ((file as any)?.name || 'upload');
+    if (blob.size > CHUNK_THRESHOLD) {
+      return this.uploadChunked(blob, filename, options);
+    }
+    const form = new FormData();
+    form.append('uploads', blob, filename);
+    return this.postUpload(this.uploadFields(form, options));
+  }
+
+  /** Upload from a public http(s) link: the server downloads the file itself (up to 200 MB). */
+  async uploadFromUrl(url: string, options: Omit<UploadOptions, 'filename' | 'onProgress'> = {}): Promise<UploadResult> {
+    const form = new FormData();
+    form.append('url', url);
+    return this.postUpload(this.uploadFields(form, options));
+  }
+
+  private async uploadChunked(blob: Blob, filename: string, options: UploadOptions): Promise<UploadResult> {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    const uploadId = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const total = Math.ceil(blob.size / CHUNK_SIZE);
+
+    for (let index = 0; index < total; index++) {
+      const piece = blob.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
+      for (let attempt = 1; ; attempt++) {
+        const form = new FormData();
+        form.append('upload_id', uploadId);
+        form.append('index', String(index));
+        form.append('total', String(total));
+        form.append('chunk', piece, 'piece');
+        try {
+          const res = await fetch(`${this.baseUrl}/chunk`, { method: 'POST', headers: this.headers(), body: form });
+          await this.parseJson<{ type: string }>(res);
+          break;
+        } catch (err) {
+          // network errors and 5xx are retried; anything the server refused (4xx) is final
+          const status = err instanceof YourImageShareError ? err.status : 0;
+          if (attempt >= 3 || (status >= 400 && status < 500)) {
+            throw err;
+          }
+        }
+      }
+      options.onProgress?.(Math.min(blob.size, (index + 1) * CHUNK_SIZE), blob.size);
+    }
+
+    const form = new FormData();
+    form.append('upload_id', uploadId);
+    form.append('filename', filename);
+    return this.postUpload(this.uploadFields(form, options));
   }
 
   /** List your uploads, newest first. Paginated 50 per page. */

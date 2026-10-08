@@ -35,7 +35,7 @@ fn main() {
     println!("{}", result.direct); // https://yourimageshare.com/ib/aB3xY9qRz1
 
     // Upload with auto-delete after 1 hour
-    client.upload("photo.jpg", Some(UploadOptions { expires_in: Some(3600) })).unwrap();
+    client.upload("photo.jpg", Some(UploadOptions { expires_in: Some(3600), ..Default::default() })).unwrap();
 
     // Upload from any std::io::Read (a network stream, an in-memory buffer, ...)
     // client.upload_reader(reader, "photo.jpg", None);
@@ -50,6 +50,23 @@ fn main() {
     client.delete(&result.id).unwrap();
 }
 ```
+
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```rust
+let result = client.upload("video.mp4", None)?; // over 90 MB: sent in pieces
+println!("{} {:?} {:?} {}", result.src, result.thumb, result.width, result.duplicate);
+
+// a fresh copy even if this exact file is already on your account
+client.upload("photo.jpg", Some(UploadOptions { allow_duplicate: true, ..Default::default() }))?;
+
+// let the server download a public link (up to 200 MB)
+client.upload_url("https://example.com/photo.jpg", None)?;
+```
+
+Pieces are only used by `upload()` (a path, so the size is known); `upload_reader()` always sends one request. **1.1.0 note:** `UploadOptions` gained `allow_duplicate` - build it with `..Default::default()` as above.
 
 ### Error handling
 

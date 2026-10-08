@@ -53,6 +53,21 @@ with YourImageShare(api_key="YOUR_API_KEY") as client:
     client.upload("photo.jpg")
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```python
+result = client.upload("video.mp4", on_progress=lambda sent, total: print(f"{sent * 100 // total}%"))
+print(result.src, result.thumb, result.width, result.height, result.duplicate)
+
+# a fresh copy even if this exact file is already on your account
+client.upload("photo.jpg", allow_duplicate=True)
+
+# let the server download a public link (up to 200 MB)
+client.upload_from_url("https://example.com/photo.jpg")
+```
+
 ### Error handling
 
 Failed requests raise `YourImageShareError` (`.status` is the HTTP status
@@ -79,7 +94,7 @@ testing against a different environment.
 
 `file` is a path (`str`/`os.PathLike`) or an open binary file object.
 `expires_in` is seconds, 60 to 2,592,000 (30 days) - omit for a permanent
-upload. Returns an `UploadResult(id, type, path, src, direct, expires_at)`.
+upload. Returns an `UploadResult(id, type, path, src, direct, expires_at, thumb, width, height, size, locked, duplicate)`.
 
 ### `client.list(page=1)`
 

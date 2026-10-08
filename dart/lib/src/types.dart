@@ -3,10 +3,30 @@
 class UploadResult {
   final String id;
   final String type;
+
+  /// Storage URL of the file as uploaded. It can change shortly afterwards
+  /// when the file is converted (WebP/MP4) - store [src].
   final String path;
+
+  /// Permanent direct file URL - always opens the current file.
   final String src;
   final String direct;
+
+  /// 280 px wide WebP thumbnail (a video's first frame), or null.
+  final String? thumb;
+  final int? width;
+  final int? height;
+
+  /// File size in bytes as stored.
+  final int? size;
+
+  /// True if the upload is password-protected.
+  final bool locked;
   final String? expiresAt;
+
+  /// True if your account had already uploaded this exact file and that
+  /// upload was returned instead of a new one.
+  final bool duplicate;
 
   UploadResult({
     required this.id,
@@ -14,7 +34,13 @@ class UploadResult {
     required this.path,
     required this.src,
     required this.direct,
+    this.thumb,
+    this.width,
+    this.height,
+    this.size,
+    this.locked = false,
     this.expiresAt,
+    this.duplicate = false,
   });
 
   factory UploadResult.fromJson(Map<String, dynamic> json) => UploadResult(
@@ -23,7 +49,13 @@ class UploadResult {
         path: json['path'] as String,
         src: json['src'] as String,
         direct: json['direct'] as String,
+        thumb: json['thumb'] as String?,
+        width: json['width'] as int?,
+        height: json['height'] as int?,
+        size: json['size'] as int?,
+        locked: json['locked'] == true,
         expiresAt: json['expires_at'] as String?,
+        duplicate: json['duplicate'] == true,
       );
 }
 
@@ -35,6 +67,11 @@ class ListedUpload {
   final String path;
   final String src;
   final String direct;
+  final String? thumb;
+  final int? width;
+  final int? height;
+  final int? size;
+  final bool locked;
   final String? expiresAt;
   final String createdAt;
 
@@ -45,6 +82,11 @@ class ListedUpload {
     required this.path,
     required this.src,
     required this.direct,
+    this.thumb,
+    this.width,
+    this.height,
+    this.size,
+    this.locked = false,
     this.expiresAt,
     required this.createdAt,
   });
@@ -56,6 +98,11 @@ class ListedUpload {
         path: json['path'] as String,
         src: json['src'] as String,
         direct: json['direct'] as String,
+        thumb: json['thumb'] as String?,
+        width: json['width'] as int?,
+        height: json['height'] as int?,
+        size: json['size'] as int?,
+        locked: json['locked'] == true,
         expiresAt: json['expires_at'] as String?,
         createdAt: json['created_at'] as String,
       );

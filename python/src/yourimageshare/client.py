@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
-from typing import Any, BinaryIO, List, Optional, Union
+import secrets
+from dataclasses import dataclass, fields
+from typing import Any, BinaryIO, Callable, List, Optional, Union
 
 import requests
 
 DEFAULT_BASE_URL = "https://yourimageshare.com/api"
-SDK_VERSION = "1.0.3"
+SDK_VERSION = "1.1.0"
+# Files above this size are sent in pieces (one request can carry at most 100 MB).
+CHUNK_THRESHOLD = 90 * 1024 * 1024
+# Size of one piece of a chunked upload (the API accepts at most 5 MB).
+CHUNK_SIZE = 5 * 1024 * 1024
+
+
+def _build(cls, data: dict):
+    """Dataclass from an API object, ignoring fields this SDK version doesn't know (the API may add more)."""
+    names = {f.name for f in fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in names})
 
 
 class YourImageShareError(Exception):
@@ -27,10 +38,22 @@ class YourImageShareError(Exception):
 class UploadResult:
     id: str
     type: str
+    #: Storage URL of the file as uploaded. It can change shortly afterwards when the file
+    #: is converted (WebP/MP4) - store ``src``.
     path: str
+    #: Permanent direct file URL - always opens the current file.
     src: str
     direct: str
-    expires_at: Optional[str]
+    expires_at: Optional[str] = None
+    #: 280 px wide WebP thumbnail (a video's first frame), or None.
+    thumb: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    #: File size in bytes as stored.
+    size: Optional[int] = None
+    locked: bool = False
+    #: True if your account had already uploaded this exact file and that upload was returned.
+    duplicate: bool = False
 
 
 @dataclass
@@ -43,6 +66,11 @@ class ListedUpload:
     direct: str
     expires_at: Optional[str]
     created_at: str
+    thumb: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    size: Optional[int] = None
+    locked: bool = False
 
 
 @dataclass
@@ -97,22 +125,39 @@ class YourImageShare:
             raise YourImageShareError(message, response.status_code)
         return body
 
+    def _post_upload(self, data: dict, files: Optional[dict] = None, timeout: Optional[float] = None) -> UploadResult:
+        response = self._session.post(self.base_url, data=data, files=files, timeout=timeout or self.timeout)
+        return _build(UploadResult, self._parse(response)["data"])
+
+    @staticmethod
+    def _fields(expires_in: Optional[int], allow_duplicate: bool) -> dict:
+        data: dict[str, Any] = {}
+        if expires_in is not None:
+            data["expires_in"] = str(expires_in)
+        if allow_duplicate:
+            data["allow_duplicate"] = "1"
+        return data
+
     def upload(
         self,
         file: Union[str, "os.PathLike[str]", BinaryIO],
         *,
         filename: Optional[str] = None,
         expires_in: Optional[int] = None,
+        allow_duplicate: bool = False,
+        on_progress: Optional[Callable[[int, int], None]] = None,
     ) -> UploadResult:
-        """Upload a file.
+        """Upload a file (up to 200 MB).
 
         `file` is a path (str or PathLike) or an already-open binary file object.
         `expires_in` is seconds (60 to 2,592,000 = 30 days) to auto-delete the
-        upload later; omit for a permanent upload.
+        upload later; omit for a permanent upload. If your account already
+        uploaded this exact file, that upload is returned with
+        ``duplicate=True`` - pass ``allow_duplicate=True`` to store a new copy.
+        Files over 90 MB are sent in 5 MB pieces automatically;
+        ``on_progress(sent, total)`` is called after each piece.
         """
-        data: dict[str, Any] = {}
-        if expires_in is not None:
-            data["expires_in"] = str(expires_in)
+        data = self._fields(expires_in, allow_duplicate)
 
         opened = None
         try:
@@ -122,28 +167,55 @@ class YourImageShare:
                 name = filename or os.path.basename(os.fspath(file))
             else:
                 fileobj = file
-                name = filename or getattr(file, "name", "upload")
+                name = filename or os.path.basename(getattr(file, "name", "upload") or "upload")
 
-            response = self._session.post(
-                self.base_url,
-                files={"uploads": (name, fileobj)},
-                data=data,
-                timeout=self.timeout,
-            )
+            size = _remaining_size(fileobj)
+            if size is not None and size > CHUNK_THRESHOLD:
+                return self._upload_chunked(fileobj, name, size, data, on_progress)
+            return self._post_upload(data, files={"uploads": (name, fileobj)})
         finally:
             if opened is not None:
                 opened.close()
 
-        body = self._parse(response)
-        return UploadResult(**body["data"])
+    def upload_from_url(self, url: str, *, expires_in: Optional[int] = None, allow_duplicate: bool = False) -> UploadResult:
+        """Upload from a public http(s) link: the server downloads the file itself (up to 200 MB)."""
+        data = self._fields(expires_in, allow_duplicate)
+        data["url"] = url
+        return self._post_upload(data, timeout=max(self.timeout, 180))
+
+    def _upload_chunked(self, fileobj: BinaryIO, name: str, size: int, data: dict, on_progress) -> UploadResult:
+        upload_id = secrets.token_hex(16)
+        total = -(-size // CHUNK_SIZE)
+        sent = 0
+        for index in range(total):
+            piece = fileobj.read(CHUNK_SIZE)
+            for attempt in range(1, 4):
+                try:
+                    response = self._session.post(
+                        f"{self.base_url}/chunk",
+                        data={"upload_id": upload_id, "index": str(index), "total": str(total)},
+                        files={"chunk": ("piece", piece)},
+                        timeout=self.timeout,
+                    )
+                    self._parse(response)
+                    break
+                except (requests.RequestException, YourImageShareError) as exc:
+                    # network errors and 5xx are retried; anything the server refused (4xx) is final
+                    status = getattr(exc, "status", 0)
+                    if attempt == 3 or 400 <= status < 500:
+                        raise
+            sent += len(piece)
+            if on_progress:
+                on_progress(sent, size)
+        return self._post_upload({**data, "upload_id": upload_id, "filename": name}, timeout=max(self.timeout, 180))
 
     def list(self, page: int = 1) -> ListResult:
         """List your uploads, newest first. Paginated 50 per page."""
         params = {"page": page} if page > 1 else {}
         response = self._session.get(self.base_url, params=params, timeout=self.timeout)
         body = self._parse(response)
-        uploads = [ListedUpload(**item) for item in body["data"]]
-        meta = ListMeta(**body["meta"])
+        uploads = [_build(ListedUpload, item) for item in body["data"]]
+        meta = _build(ListMeta, body["meta"])
         return ListResult(data=uploads, meta=meta)
 
     def delete(self, upload_id: str) -> None:
@@ -159,3 +231,14 @@ class YourImageShare:
 
     def __exit__(self, *exc_info: object) -> None:
         self.close()
+
+
+def _remaining_size(fileobj: BinaryIO) -> Optional[int]:
+    """Bytes left to read in a seekable file object, or None if it can't be measured."""
+    try:
+        position = fileobj.tell()
+        end = fileobj.seek(0, os.SEEK_END)
+        fileobj.seek(position)
+        return end - position
+    except (AttributeError, OSError, ValueError):
+        return None

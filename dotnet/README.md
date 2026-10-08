@@ -49,6 +49,26 @@ foreach (var item in listing.Data)
 await client.DeleteAsync(result.Id);
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```csharp
+var result = await client.UploadAsync("video.mp4", new UploadOptions
+{
+    OnProgress = (sent, total) => Console.WriteLine($"{sent * 100 / total}%"),
+});
+Console.WriteLine($"{result.Src} {result.Thumb} {result.Width} {result.Duplicate}");
+
+// a fresh copy even if this exact file is already on your account
+await client.UploadAsync("photo.jpg", new UploadOptions { AllowDuplicate = true });
+
+// let the server download a public link (up to 200 MB)
+await client.UploadUrlAsync("https://example.com/photo.jpg");
+```
+
+A stream is sent in pieces when it is seekable (e.g. a `FileStream`); other streams go up in one request.
+
 ### Error handling
 
 .NET SDK throws instead of returning an error value, unlike the
@@ -82,7 +102,7 @@ handler - defaults to a client with a 30s timeout.
 Streams the file from disk (doesn't buffer the whole thing in memory -
 uploads can be up to 200MB). `options.ExpiresIn` is seconds, 60 to
 2,592,000 (30 days); null or zero means a permanent upload. Returns an
-`UploadResult` with `Id`, `Type`, `Path`, `Src`, `Direct`, `ExpiresAt`.
+`UploadResult` with `Id`, `Type`, `Path`, `Src`, `Direct`, `Thumb`, `Width`, `Height`, `Size`, `Locked`, `ExpiresAt`, `Duplicate`.
 
 ### `Task<UploadResult> UploadAsync(Stream stream, string filename, UploadOptions? options = null, CancellationToken ct = default)`
 
@@ -91,7 +111,7 @@ Same as the path overload, but from any `Stream` instead of a file path.
 ### `Task<ListResult> ListAsync(int page = 1, CancellationToken ct = default)`
 
 Returns a `ListResult` with `Data` (a `List<ListedUpload>` - `Id`,
-`Type`, `Title`, `Path`, `Src`, `Direct`, `ExpiresAt`, `CreatedAt`) and
+`Type`, `Title`, `Path`, `Src`, `Direct`, `Thumb`, `Width`, `Height`, `Size`, `Locked`, `ExpiresAt`, `CreatedAt`) and
 `Meta` (`ListMeta` - `CurrentPage`, `LastPage`, `Total`).
 
 ### `Task DeleteAsync(string id, CancellationToken ct = default)`

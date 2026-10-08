@@ -5,8 +5,8 @@ plugins, and screenshot tool configs) are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Each SDK also has its own version, tracked in its `package.json`/
-`pyproject.toml` (currently `yourimageshare` JS SDK 1.0.3, `yourimageshare`
-Python SDK 1.0.3, `yourimageshare-mcp` 1.0.6, `yourimageshare-discord-bot`
+`pyproject.toml` (currently `yourimageshare` JS SDK 1.1.0, `yourimageshare`
+Python SDK 1.1.0, `yourimageshare-mcp` 1.1.0, `yourimageshare-discord-bot`
 0.1.0) - this log covers the repo as a whole rather than duplicating
 per-package release notes.
 
@@ -35,7 +35,24 @@ per-package release notes.
   WordPress.org Plugin Check clean, tested with WordPress 7.1.
 - Docs: `API.md`, `openapi.yaml`/`openapi.json` and `/about/api` updated for
   all of the above (`API.md` also gained the existing `url` field and the
-  full list of accepted formats). **SDKs not updated yet.**
+  full list of accepted formats).
+- **SDKs 1.1.0 (JS, Python, Ruby, Rust, Go, .NET, Dart, Elixir, PHP) and
+  MCP server 1.1.0:** new result fields (`thumb`, `width`, `height`, `size`,
+  `locked`, `duplicate`), an allow-duplicate option, upload from a link,
+  and files up to 200 MB - anything over 90 MB is sent in 5 MB pieces
+  automatically, with progress callbacks.
+  - **Python 1.0.x and MCP 1.0.x broke on the new response fields** (Python
+    built results with `UploadResult(**data)`, the MCP server declared closed
+    output schemas). The API sends those versions the old field set; 1.1.0
+    of both ignores fields it doesn't know.
+  - Rust: `UploadOptions` gained `allow_duplicate`; build it with
+    `..Default::default()`.
+  - Elixir: `delete/2` now returns `:ok` as documented (it returned
+    `{:ok, :ok}`).
+  - MCP server: `upload_image` takes `url` and `allowDuplicate`; the MCP
+    registry name is now `io.github.yourimageshare/yourimageshare`.
+- Postman collection: `Upload Piece (large files)` request and the new upload
+  fields.
 
 - **The `X-API-Key` header now takes precedence over `?key=`** when both
   are present (previously the query parameter won). `?key=` still works

@@ -1,135 +1,251 @@
 {
-	"info": {
-		"name": "YourImageShare API",
-		"description": "Free API to upload, list, and delete images and videos on YourImageShare.\n\nDocs: https://yourimageshare.com/about/api\n\nAuthentication: every request needs your account's API key, found on the API tab of https://yourimageshare.com/my-account. This collection sends it as an `X-API-Key` header (collection-level auth) - the preferred method, since query strings tend to end up in logs. It can alternatively be passed as a `?key=` query parameter instead, kept for compatibility - if both are present, the header wins.\n\nBefore running: set the `api_key` collection variable to your real key. The Upload request auto-saves the returned upload id into `upload_id` so List/Delete can be run right after it with no manual copy-paste.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"auth": {
-		"type": "apikey",
-		"apikey": [
-			{ "key": "key", "value": "X-API-Key", "type": "string" },
-			{ "key": "value", "value": "{{api_key}}", "type": "string" },
-			{ "key": "in", "value": "header", "type": "string" }
-		]
-	},
-	"variable": [
-		{ "key": "base_url", "value": "https://yourimageshare.com", "type": "string" },
-		{ "key": "api_key", "value": "YOUR_API_KEY_HERE", "type": "string" },
-		{ "key": "upload_id", "value": "", "type": "string" }
-	],
-	"item": [
-		{
-			"name": "Upload File",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"type": "text/javascript",
-						"exec": [
-							"if (pm.response.code === 200) {",
-							"    var json = pm.response.json();",
-							"    if (json && json.data && json.data.id) {",
-							"        pm.collectionVariables.set('upload_id', json.data.id);",
-							"    }",
-							"}",
-							"pm.test('Status code is 200', function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"pm.test('Response has a direct URL', function () {",
-							"    pm.expect(pm.response.json().data.direct).to.be.a('string');",
-							"});"
-						]
-					}
-				}
-			],
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
-						{
-							"key": "uploads",
-							"type": "file",
-							"src": [],
-							"description": "The image or video file to upload. Field name must be exactly \"uploads\"."
-						},
-						{
-							"key": "expires_in",
-							"value": "",
-							"type": "text",
-							"disabled": true,
-							"description": "Optional. Auto-delete after this many seconds (60 to 2592000, i.e. 1 minute to 30 days). Enable this field and set a value to test expiring uploads."
-						}
-					]
-				},
-				"url": {
-					"raw": "{{base_url}}/api",
-					"host": [ "{{base_url}}" ],
-					"path": [ "api" ]
-				},
-				"description": "Uploads a single image or video. On success, returns the direct URL, page URL, and an id you can use with List/Delete.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"data\": { \"id\", \"type\", \"path\", \"src\", \"direct\", \"expires_at\" } }`\n- 401: missing/invalid API key\n- 403: account or IP is banned\n- 422: missing file, unsupported/invalid file, file previously flagged by moderation, or an out-of-range `expires_in`\n- 500: upload/server error"
-			}
-		},
-		{
-			"name": "List Uploads",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"type": "text/javascript",
-						"exec": [
-							"pm.test('Status code is 200', function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"pm.test('Response has a data array and pagination meta', function () {",
-							"    var json = pm.response.json();",
-							"    pm.expect(json.data).to.be.an('array');",
-							"    pm.expect(json.meta).to.have.property('current_page');",
-							"});"
-						]
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api?page=1",
-					"host": [ "{{base_url}}" ],
-					"path": [ "api" ],
-					"query": [
-						{ "key": "page", "value": "1", "description": "Optional. Paginated 50 per page, newest first." }
-					]
-				},
-				"description": "Lists the authenticated account's own uploads, newest first, 50 per page.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"data\": [ { \"id\", \"type\", \"title\", \"path\", \"src\", \"direct\", \"expires_at\", \"created_at\" }, ... ], \"meta\": { \"current_page\", \"last_page\", \"total\" } }`\n- 401: missing/invalid API key"
-			}
-		},
-		{
-			"name": "Delete Upload",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"type": "text/javascript",
-						"exec": [
-							"pm.test('Status code is 200 or 404', function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
-							"});"
-						]
-					}
-				}
-			],
-			"request": {
-				"method": "DELETE",
-				"header": [],
-				"url": {
-					"raw": "{{base_url}}/api/{{upload_id}}",
-					"host": [ "{{base_url}}" ],
-					"path": [ "api", "{{upload_id}}" ]
-				},
-				"description": "Deletes an upload by id (owned by the authenticated account). `upload_id` is auto-filled by the Upload File request's test script, or set it manually.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"msg\": \"Deleted.\" }`\n- 401: missing/invalid API key\n- 404: not found, not owned by this account, or already deleted"
-			}
-		}
-	]
+  "info": {
+    "name": "YourImageShare API",
+    "description": "Free API to upload, list, and delete images and videos on YourImageShare.\n\nDocs: https://yourimageshare.com/about/api\n\nAuthentication: every request needs your account's API key, found on the API tab of https://yourimageshare.com/my-account. This collection sends it as an `X-API-Key` header (collection-level auth) - the preferred method, since query strings tend to end up in logs. It can alternatively be passed as a `?key=` query parameter instead, kept for compatibility - if both are present, the header wins.\n\nBefore running: set the `api_key` collection variable to your real key. The Upload request auto-saves the returned upload id into `upload_id` so List/Delete can be run right after it with no manual copy-paste.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{api_key}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://yourimageshare.com",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "YOUR_API_KEY_HERE",
+      "type": "string"
+    },
+    {
+      "key": "upload_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Upload File",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var json = pm.response.json();",
+              "    if (json && json.data && json.data.id) {",
+              "        pm.collectionVariables.set('upload_id', json.data.id);",
+              "    }",
+              "}",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response has a direct URL', function () {",
+              "    pm.expect(pm.response.json().data.direct).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "uploads",
+              "type": "file",
+              "src": [],
+              "description": "The image or video file to upload. Field name must be exactly \"uploads\"."
+            },
+            {
+              "key": "expires_in",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "Optional. Auto-delete after this many seconds (60 to 2592000, i.e. 1 minute to 30 days). Enable this field and set a value to test expiring uploads."
+            },
+            {
+              "key": "url",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "Instead of uploads: a public http(s) link the server downloads (up to 200 MB)."
+            },
+            {
+              "key": "upload_id",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "Instead of uploads: finish a file sent in pieces to POST /api/chunk (up to 200 MB)."
+            },
+            {
+              "key": "filename",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "With upload_id: the original file name."
+            },
+            {
+              "key": "allow_duplicate",
+              "value": "1",
+              "type": "text",
+              "disabled": true,
+              "description": "Store a new copy even if this account already uploaded the exact same file."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api"
+          ]
+        },
+        "description": "Uploads a single image or video. On success, returns the direct URL, page URL, and an id you can use with List/Delete.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"data\": { \"id\", \"type\", \"path\", \"src\", \"direct\", \"expires_at\" } }`\n- 401: missing/invalid API key\n- 403: account or IP is banned\n- 422: missing file, unsupported/invalid file, file previously flagged by moderation, or an out-of-range `expires_in`\n- 500: upload/server error"
+      }
+    },
+    {
+      "name": "Upload Piece (large files)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "upload_id",
+              "value": "0123456789abcdef0123456789abcdef",
+              "type": "text",
+              "description": "32 random hex characters, the same for every piece of one file."
+            },
+            {
+              "key": "index",
+              "value": "0",
+              "type": "text",
+              "description": "0-based piece number."
+            },
+            {
+              "key": "total",
+              "value": "1",
+              "type": "text",
+              "description": "Number of pieces."
+            },
+            {
+              "key": "chunk",
+              "type": "file",
+              "src": "",
+              "description": "The bytes of this piece, at most 5 MB."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/chunk",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "chunk"
+          ]
+        },
+        "description": "For files over 100 MB (up to 200 MB): send pieces of at most 5 MB, then call Upload File with upload_id and filename instead of uploads. Unfinished uploads are deleted after 2 hours."
+      }
+    },
+    {
+      "name": "List Uploads",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response has a data array and pagination meta', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.data).to.be.an('array');",
+              "    pm.expect(json.meta).to.have.property('current_page');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api?page=1",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Optional. Paginated 50 per page, newest first."
+            }
+          ]
+        },
+        "description": "Lists the authenticated account's own uploads, newest first, 50 per page.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"data\": [ { \"id\", \"type\", \"title\", \"path\", \"src\", \"direct\", \"expires_at\", \"created_at\" }, ... ], \"meta\": { \"current_page\", \"last_page\", \"total\" } }`\n- 401: missing/invalid API key"
+      }
+    },
+    {
+      "name": "Delete Upload",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 404', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/{{upload_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "{{upload_id}}"
+          ]
+        },
+        "description": "Deletes an upload by id (owned by the authenticated account). `upload_id` is auto-filled by the Upload File request's test script, or set it manually.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"msg\": \"Deleted.\" }`\n- 401: missing/invalid API key\n- 404: not found, not owned by this account, or already deleted"
+      }
+    }
+  ]
 }

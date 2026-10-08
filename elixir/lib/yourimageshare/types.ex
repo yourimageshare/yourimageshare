@@ -7,10 +7,32 @@ defmodule YourImageShare.UploadResult do
           path: String.t(),
           src: String.t(),
           direct: String.t(),
-          expires_at: String.t() | nil
+          thumb: String.t() | nil,
+          width: non_neg_integer() | nil,
+          height: non_neg_integer() | nil,
+          size: non_neg_integer() | nil,
+          locked: boolean(),
+          expires_at: String.t() | nil,
+          duplicate: boolean()
         }
 
-  defstruct [:id, :type, :path, :src, :direct, :expires_at]
+  # path is the storage URL as uploaded and can change shortly afterwards when the file is converted
+  # (WebP/MP4) - store src, the permanent link. thumb is a 280 px WebP thumbnail; duplicate is true when
+  # the account already had this exact file and that upload was returned.
+  defstruct [
+    :id,
+    :type,
+    :path,
+    :src,
+    :direct,
+    :thumb,
+    :width,
+    :height,
+    :size,
+    :expires_at,
+    locked: false,
+    duplicate: false
+  ]
 
   @doc false
   def from_map(map) do
@@ -20,7 +42,13 @@ defmodule YourImageShare.UploadResult do
       path: map["path"],
       src: map["src"],
       direct: map["direct"],
-      expires_at: map["expires_at"]
+      thumb: map["thumb"],
+      width: map["width"],
+      height: map["height"],
+      size: map["size"],
+      locked: map["locked"] == true,
+      expires_at: map["expires_at"],
+      duplicate: map["duplicate"] == true
     }
   end
 end
@@ -35,11 +63,30 @@ defmodule YourImageShare.ListedUpload do
           path: String.t(),
           src: String.t(),
           direct: String.t(),
+          thumb: String.t() | nil,
+          width: non_neg_integer() | nil,
+          height: non_neg_integer() | nil,
+          size: non_neg_integer() | nil,
+          locked: boolean(),
           expires_at: String.t() | nil,
           created_at: String.t()
         }
 
-  defstruct [:id, :type, :title, :path, :src, :direct, :expires_at, :created_at]
+  defstruct [
+    :id,
+    :type,
+    :title,
+    :path,
+    :src,
+    :direct,
+    :thumb,
+    :width,
+    :height,
+    :size,
+    :expires_at,
+    :created_at,
+    locked: false
+  ]
 
   @doc false
   def from_map(map) do
@@ -50,6 +97,11 @@ defmodule YourImageShare.ListedUpload do
       path: map["path"],
       src: map["src"],
       direct: map["direct"],
+      thumb: map["thumb"],
+      width: map["width"],
+      height: map["height"],
+      size: map["size"],
+      locked: map["locked"] == true,
       expires_at: map["expires_at"],
       created_at: map["created_at"]
     }

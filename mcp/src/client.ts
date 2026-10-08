@@ -1,24 +1,35 @@
 export const DEFAULT_BASE_URL = 'https://yourimageshare.com/api';
-const SDK_VERSION = '1.0.2';
+const SDK_VERSION = '1.1.0';
+/** Files above this size are sent in pieces (one request can carry at most 100 MB). */
+const CHUNK_THRESHOLD = 90 * 1024 * 1024;
+const CHUNK_SIZE = 5 * 1024 * 1024;
 
-export interface UploadResult {
+export interface Upload {
   id: string;
   type: 'image' | 'video';
   path: string;
   src: string;
   direct: string;
+  thumb: string | null;
+  width: number | null;
+  height: number | null;
+  size: number | null;
+  locked: boolean;
   expires_at: string | null;
 }
 
-export interface ListedUpload {
-  id: string;
-  type: 'image' | 'video';
+export interface UploadResult extends Upload {
+  duplicate: boolean;
+}
+
+export interface ListedUpload extends Upload {
   title: string | null;
-  path: string;
-  src: string;
-  direct: string;
-  expires_at: string | null;
   created_at: string;
+}
+
+export interface UploadOptions {
+  expiresIn?: number;
+  allowDuplicate?: boolean;
 }
 
 export interface ListResult {
@@ -68,15 +79,61 @@ export class YourImageShareClient {
     return body as T;
   }
 
-  async upload(blob: Blob, filename: string, expiresIn?: number): Promise<UploadResult> {
-    const form = new FormData();
-    form.append('uploads', blob, filename);
-    if (expiresIn !== undefined) {
-      form.append('expires_in', String(expiresIn));
+  private async postUpload(form: FormData, options: UploadOptions): Promise<UploadResult> {
+    if (options.expiresIn !== undefined) {
+      form.append('expires_in', String(options.expiresIn));
+    }
+    if (options.allowDuplicate) {
+      form.append('allow_duplicate', '1');
     }
     const res = await fetch(this.baseUrl, { method: 'POST', headers: this.headers(), body: form });
     const body = await this.parse<{ data: UploadResult }>(res);
     return body.data;
+  }
+
+  /** Upload a file (up to 200 MB); files over 90 MB go up in 5 MB pieces. */
+  async upload(blob: Blob, filename: string, options: UploadOptions = {}): Promise<UploadResult> {
+    const form = new FormData();
+    if (blob.size > CHUNK_THRESHOLD) {
+      form.append('upload_id', await this.sendChunks(blob));
+      form.append('filename', filename);
+    } else {
+      form.append('uploads', blob, filename);
+    }
+    return this.postUpload(form, options);
+  }
+
+  /** Upload from a public link: the server downloads the file (up to 200 MB). */
+  async uploadFromUrl(url: string, options: UploadOptions = {}): Promise<UploadResult> {
+    const form = new FormData();
+    form.append('url', url);
+    return this.postUpload(form, options);
+  }
+
+  private async sendChunks(blob: Blob): Promise<string> {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    const uploadId = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const total = Math.ceil(blob.size / CHUNK_SIZE);
+    for (let index = 0; index < total; index++) {
+      const piece = blob.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
+      for (let attempt = 1; ; attempt++) {
+        const form = new FormData();
+        form.append('upload_id', uploadId);
+        form.append('index', String(index));
+        form.append('total', String(total));
+        form.append('chunk', piece, 'piece');
+        try {
+          await this.parse(await fetch(`${this.baseUrl}/chunk`, { method: 'POST', headers: this.headers(), body: form }));
+          break;
+        } catch (err) {
+          // network errors and 5xx are retried; anything the server refused (4xx) is final
+          const status = err instanceof YourImageShareApiError ? err.status : 0;
+          if (attempt >= 3 || (status >= 400 && status < 500)) throw err;
+        }
+      }
+    }
+    return uploadId;
   }
 
   async list(page = 1): Promise<ListResult> {

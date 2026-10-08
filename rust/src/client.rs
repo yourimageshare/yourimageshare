@@ -10,7 +10,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// Used when no [`Client::with_base_url`] override is given.
 pub const DEFAULT_BASE_URL: &str = "https://yourimageshare.com/api";
 
-const SDK_VERSION: &str = "1.0.0";
+const SDK_VERSION: &str = "1.1.0";
+/// Files above this size are sent in pieces (one request can carry at most 100 MB).
+const CHUNK_THRESHOLD: u64 = 90 * 1024 * 1024;
+/// Size of one piece of a chunked upload (the API accepts at most 5 MB).
+const CHUNK_SIZE: usize = 5 * 1024 * 1024;
 
 /// Talks to the YourImageShare upload API. Build one with [`Client::new`].
 #[derive(Debug, Clone)]
@@ -26,6 +30,9 @@ pub struct UploadOptions {
     /// Auto-deletes the upload after this many seconds (60 to 2,592,000 =
     /// 30 days). `None` or `Some(0)` means a permanent upload.
     pub expires_in: Option<u32>,
+    /// Store a new copy even if your account already uploaded this exact
+    /// file (otherwise that upload is returned with `duplicate: true`).
+    pub allow_duplicate: bool,
 }
 
 impl Client {
@@ -52,8 +59,9 @@ impl Client {
         self
     }
 
-    /// Uploads a local file by path. Streams it from disk - does not
-    /// buffer the whole file in memory first.
+    /// Uploads a local file by path (up to 200 MB). Streams it from disk -
+    /// does not buffer the whole file in memory first. Files over 90 MB are
+    /// sent in 5 MB pieces automatically.
     pub fn upload(
         &self,
         file_path: impl AsRef<Path>,
@@ -68,7 +76,77 @@ impl Client {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "upload".to_string());
+        let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+        if size > CHUNK_THRESHOLD {
+            return self.upload_chunked(file, size, &filename, opts.unwrap_or_default());
+        }
         self.upload_reader(file, &filename, opts)
+    }
+
+    /// Uploads from a public http(s) link: the server downloads the file
+    /// itself (up to 200 MB).
+    pub fn upload_url(&self, url: &str, opts: Option<UploadOptions>) -> Result<UploadResult, ApiError> {
+        let opts = opts.unwrap_or_default();
+        let mut fields = vec![("url", url.to_string())];
+        push_options(&mut fields, &opts);
+        self.post_upload(&fields)
+    }
+
+    fn upload_chunked<R: Read>(
+        &self,
+        mut reader: R,
+        size: u64,
+        filename: &str,
+        opts: UploadOptions,
+    ) -> Result<UploadResult, ApiError> {
+        let upload_id = make_upload_id();
+        let total = ((size + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as usize;
+        let mut buffer = vec![0u8; CHUNK_SIZE];
+        for index in 0..total {
+            let piece = read_piece(&mut reader, &mut buffer)?;
+            let fields = [
+                ("upload_id", upload_id.clone()),
+                ("index", index.to_string()),
+                ("total", total.to_string()),
+            ];
+            let mut attempt = 0;
+            loop {
+                attempt += 1;
+                let (content_type, body) = multipart(&fields, Some(("chunk", "piece", &piece)));
+                let result = ureq::post(&format!("{}/chunk", self.base_url.trim_end_matches('/')))
+                    .set("X-API-Key", &self.api_key)
+                    .set("User-Agent", &format!("yourimageshare-rust/{SDK_VERSION}"))
+                    .set("Content-Type", &content_type)
+                    .timeout(self.timeout)
+                    .send_bytes(&body);
+                match call::<serde_json::Value>(result) {
+                    Ok(_) => break,
+                    // network errors (status 0) and 5xx are retried; anything the server refused (4xx) is final
+                    Err(e) if attempt < 3 && !(400..500).contains(&e.status) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+        let mut fields = vec![("upload_id", upload_id), ("filename", filename.to_string())];
+        push_options(&mut fields, &opts);
+        self.post_upload(&fields)
+    }
+
+    fn post_upload(&self, fields: &[(&str, String)]) -> Result<UploadResult, ApiError> {
+        let (content_type, body) = multipart(fields, None);
+        let result = ureq::post(&self.base_url)
+            .set("X-API-Key", &self.api_key)
+            .set("User-Agent", &format!("yourimageshare-rust/{SDK_VERSION}"))
+            .set("Content-Type", &content_type)
+            .timeout(self.timeout.max(Duration::from_secs(180)))
+            .send_bytes(&body);
+
+        #[derive(Deserialize)]
+        struct UploadEnvelope {
+            data: UploadResult,
+        }
+
+        call::<UploadEnvelope>(result).map(|e| e.data)
     }
 
     /// Uploads from any [`Read`] (an open file, a network stream, an
@@ -103,6 +181,10 @@ impl Client {
                 .extend_from_slice(b"Content-Disposition: form-data; name=\"expires_in\"\r\n\r\n");
             epilogue.extend_from_slice(expires_in.to_string().as_bytes());
             epilogue.extend_from_slice(b"\r\n");
+        }
+        if opts.allow_duplicate {
+            epilogue.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            epilogue.extend_from_slice(b"Content-Disposition: form-data; name=\"allow_duplicate\"\r\n\r\n1\r\n");
         }
         epilogue.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
 
@@ -169,6 +251,71 @@ fn make_boundary() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     format!("----yourimageshareRustBoundary{nanos:x}")
+}
+
+/// 32 hex characters for a chunked upload's id (no rand dependency: time, process and a counter).
+fn make_upload_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mix = (std::process::id() as u64) << 32 ^ COUNTER.fetch_add(1, Ordering::Relaxed) ^ (nanos >> 64) as u64;
+    format!("{:016x}{:016x}", nanos as u64, mix.wrapping_mul(0x9E37_79B9_7F4A_7C15))
+}
+
+/// Reads up to one piece; shorter only at the end of the stream.
+fn read_piece<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<Vec<u8>, ApiError> {
+    let mut filled = 0;
+    while filled < buffer.len() {
+        match reader.read(&mut buffer[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                return Err(ApiError {
+                    status: 0,
+                    message: format!("reading file: {e}"),
+                })
+            }
+        }
+    }
+    Ok(buffer[..filled].to_vec())
+}
+
+fn push_options(fields: &mut Vec<(&str, String)>, opts: &UploadOptions) {
+    if let Some(expires_in) = opts.expires_in.filter(|&v| v > 0) {
+        fields.push(("expires_in", expires_in.to_string()));
+    }
+    if opts.allow_duplicate {
+        fields.push(("allow_duplicate", "1".to_string()));
+    }
+}
+
+/// An in-memory multipart/form-data body: plain fields plus an optional
+/// (field, filename, bytes) file part.
+fn multipart(fields: &[(&str, String)], file: Option<(&str, &str, &[u8])>) -> (String, Vec<u8>) {
+    let boundary = make_boundary();
+    let mut body = Vec::new();
+    for (name, value) in fields {
+        body.extend_from_slice(
+            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes(),
+        );
+    }
+    if let Some((name, filename, bytes)) = file {
+        body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"; filename=\"{}\"\r\nContent-Type: application/octet-stream\r\n\r\n",
+                escape_filename(filename)
+            )
+            .as_bytes(),
+        );
+        body.extend_from_slice(bytes);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    (format!("multipart/form-data; boundary={boundary}"), body)
 }
 
 fn escape_filename(filename: &str) -> String {

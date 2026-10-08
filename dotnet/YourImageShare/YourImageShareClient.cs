@@ -19,7 +19,13 @@ namespace YourImageShare
     public sealed class YourImageShareClient
     {
         public const string DefaultBaseUrl = "https://yourimageshare.com/api";
-        private const string SdkVersion = "1.0.0";
+        private const string SdkVersion = "1.1.0";
+
+        /// <summary>Files above this size are sent in pieces (one request can carry at most 100 MB).</summary>
+        private const long ChunkThreshold = 90L * 1024 * 1024;
+
+        /// <summary>Size of one piece of a chunked upload (the API accepts at most 5 MB).</summary>
+        private const int ChunkSize = 5 * 1024 * 1024;
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -45,10 +51,10 @@ namespace YourImageShare
             _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         }
 
-        /// <summary>Uploads a local file by path. Streams from disk - doesn't buffer the whole file in memory.</summary>
+        /// <summary>Uploads a local file by path (up to 200 MB). Streams from disk - doesn't buffer the whole file in memory. Files over 90 MB are sent in 5 MB pieces automatically.</summary>
         public async Task<UploadResult> UploadAsync(string filePath, UploadOptions? options = null, CancellationToken ct = default)
         {
-            using var stream = File.OpenRead(filePath);
+            using var stream = File.OpenRead(filePath); // seekable: files over 90 MB are sent in pieces
             return await UploadAsync(stream, Path.GetFileName(filePath), options, ct).ConfigureAwait(false);
         }
 
@@ -60,12 +66,38 @@ namespace YourImageShare
         /// </summary>
         public async Task<UploadResult> UploadAsync(Stream stream, string filename, UploadOptions? options = null, CancellationToken ct = default)
         {
+            // a seekable stream over 90 MB (e.g. a FileStream) goes up in pieces
+            if (stream.CanSeek && stream.Length - stream.Position > ChunkThreshold)
+            {
+                var uploadId = await SendChunksAsync(stream, stream.Length - stream.Position, options, ct).ConfigureAwait(false);
+                using var finish = new MultipartFormDataContent();
+                finish.Add(new StringContent(uploadId), "upload_id");
+                finish.Add(new StringContent(filename), "filename");
+                return await PostUploadAsync(finish, options, ct).ConfigureAwait(false);
+            }
+
             using var content = new MultipartFormDataContent();
             content.Add(new StreamContent(stream), "uploads", filename);
+            return await PostUploadAsync(content, options, ct).ConfigureAwait(false);
+        }
 
+        /// <summary>Uploads from a public http(s) link: the server downloads the file itself (up to 200 MB).</summary>
+        public async Task<UploadResult> UploadUrlAsync(string url, UploadOptions? options = null, CancellationToken ct = default)
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(url), "url");
+            return await PostUploadAsync(content, options, ct).ConfigureAwait(false);
+        }
+
+        private async Task<UploadResult> PostUploadAsync(MultipartFormDataContent content, UploadOptions? options, CancellationToken ct)
+        {
             if (options?.ExpiresIn is int expiresIn && expiresIn > 0)
             {
                 content.Add(new StringContent(expiresIn.ToString()), "expires_in");
+            }
+            if (options?.AllowDuplicate == true)
+            {
+                content.Add(new StringContent("1"), "allow_duplicate");
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl) { Content = content };
@@ -74,6 +106,50 @@ namespace YourImageShare
             var raw = await SendAsync(request, ct).ConfigureAwait(false);
             var body = JsonSerializer.Deserialize<UploadEnvelope>(raw, JsonOptions);
             return body?.Data ?? throw new YourImageShareException(0, "internal: empty response body");
+        }
+
+        private async Task<string> SendChunksAsync(Stream stream, long size, UploadOptions? options, CancellationToken ct)
+        {
+            var uploadId = Guid.NewGuid().ToString("N"); // 32 hex characters
+            var total = (int)((size + ChunkSize - 1) / ChunkSize);
+            var buffer = new byte[ChunkSize];
+            long sent = 0;
+
+            for (var index = 0; index < total; index++)
+            {
+                var read = 0;
+                while (read < ChunkSize)
+                {
+                    var n = await stream.ReadAsync(buffer, read, ChunkSize - read, ct).ConfigureAwait(false);
+                    if (n == 0) break;
+                    read += n;
+                }
+
+                for (var attempt = 1; ; attempt++)
+                {
+                    using var content = new MultipartFormDataContent();
+                    content.Add(new StringContent(uploadId), "upload_id");
+                    content.Add(new StringContent(index.ToString()), "index");
+                    content.Add(new StringContent(total.ToString()), "total");
+                    content.Add(new ByteArrayContent(buffer, 0, read), "chunk", "piece");
+                    using var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl.TrimEnd('/') + "/chunk") { Content = content };
+                    SetCommonHeaders(request);
+                    try
+                    {
+                        await SendAsync(request, ct).ConfigureAwait(false);
+                        break;
+                    }
+                    catch (YourImageShareException ex) when (attempt < 3 && !(ex.Status >= 400 && ex.Status < 500))
+                    {
+                        // network errors (status 0) and 5xx are retried; anything the server refused (4xx) is final
+                    }
+                }
+
+                sent += read;
+                options?.OnProgress?.Invoke(sent, size);
+            }
+
+            return uploadId;
         }
 
         /// <summary>Returns your uploads, newest first, 50 per page. page &lt; 2 fetches the first page.</summary>

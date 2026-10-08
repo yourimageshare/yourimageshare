@@ -56,14 +56,19 @@ Add to your MCP client's config (e.g. `claude_desktop_config.json`):
 
 ### `upload_image`
 
-Upload a file. Provide **either**:
-- `path` - a local file path this server process can read, or
+Upload a file (up to 200 MB - files over 90 MB are sent in pieces
+automatically). Provide **exactly one** of:
+- `path` - a local file path this server process can read,
 - `base64` + `filename` - inline file contents, for MCP clients with no local
-  filesystem access.
+  filesystem access, or
+- `url` - a public http(s) link the YourImageShare server downloads itself.
 
 Optional `expiresIn` (seconds, 60 to 2,592,000 = 30 days) auto-deletes the
-upload later. Returns the same JSON shape as the HTTP API's upload response
-(`id`, `type`, `path`, `src`, `direct`, `expires_at`).
+upload later. If the account already uploaded this exact file, the existing
+upload is returned with `duplicate: true`; set `allowDuplicate` to store a
+new copy. Returns `id`, `type`, `path`, `src`, `direct`, `thumb` (280 px
+WebP thumbnail), `width`, `height`, `size`, `locked`, `expires_at` and
+`duplicate` - store `src`, since `path` can change after conversion.
 
 ### `list_uploads`
 

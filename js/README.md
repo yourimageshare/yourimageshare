@@ -56,6 +56,24 @@ const upload = await client.upload(blob, { filename: 'screenshot.png' });
 console.log(upload.direct);
 ```
 
+### Large files, duplicates, links and thumbnails
+
+Files up to 200 MB are supported. Anything over 90 MB is sent in 5 MB pieces automatically (one request can carry at most 100 MB). If your account already uploaded the exact same file, the existing upload is returned with `duplicate` set - opt out with the allow-duplicate option. Results also carry `thumb` (a 280 px WebP thumbnail), `width`, `height`, `size` and `locked`. Store `src`, not `path`: `path` can change shortly after upload when the file is converted (WebP/MP4).
+
+```ts
+const result = await client.upload(await blobFromFile('video.mp4'), {
+  filename: 'video.mp4',
+  onProgress: (sent, total) => console.log(`${Math.round((sent / total) * 100)}%`),
+});
+console.log(result.src, result.thumb, result.width, result.height, result.duplicate);
+
+// a fresh copy even if this exact file is already on your account
+await client.upload(bytes, { filename: 'photo.jpg', allowDuplicate: true });
+
+// let the server download a public link (up to 200 MB)
+await client.uploadFromUrl('https://example.com/photo.jpg');
+```
+
 ### Error handling
 
 Failed requests throw `YourImageShareError` (message + HTTP `status`):
@@ -86,7 +104,7 @@ testing against a different environment.
 2,592,000 (30 days) - omit for a permanent upload. Resolves to:
 
 ```ts
-{ id, type, path, src, direct, expires_at }
+{ id, type, path, src, direct, thumb, width, height, size, locked, expires_at, duplicate }
 ```
 
 ### `client.list(page?)`
