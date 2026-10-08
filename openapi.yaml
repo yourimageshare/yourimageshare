@@ -236,9 +236,6 @@ paths:
         same 32-hex-character upload_id, index 0..total-1, then call POST / with upload_id and filename. Unfinished uploads
         are deleted after 2 hours. Only the finishing POST / counts toward the upload rate limits (pieces: 300 a minute per
         key).'
-      security:
-      - ApiKeyHeader: []
-      - ApiKeyQuery: []
       requestBody:
         required: true
         content:
