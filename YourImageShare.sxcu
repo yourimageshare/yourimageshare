@@ -10,6 +10,7 @@
   "Body": "MultipartFormData",
   "FileFormName": "uploads",
   "URL": "$json:data.src$",
-  "ThumbnailURL": "$json:data.src$",
-  "ErrorMessage": "$json:errors$"
+  "ThumbnailURL": "$json:data.thumb$",
+  "ErrorMessage": "$json:errors$",
+  "DeletionURL": "$json:data.delete_url$"
 }
