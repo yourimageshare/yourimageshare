@@ -1,7 +1,7 @@
 {
   "name": "yourimageshare-mcp",
   "version": "1.0.6",
-  "mcpName": "io.github.MediaShareORG/yourimageshare",
+  "mcpName": "io.github.yourimageshare/yourimageshare",
   "license": "MIT",
   "description": "MCP server exposing the YourImageShare upload API (upload/list/delete) as tools for AI agents.",
   "keywords": [
@@ -16,7 +16,7 @@
   "bugs": "https://yourimageshare.com/contact",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MediaShareORG/yourimageshare.git",
+    "url": "git+https://github.com/yourimageshare/yourimageshare.git",
     "directory": "mcp"
   },
   "type": "module",

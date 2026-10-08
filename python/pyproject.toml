@@ -29,7 +29,7 @@ name = "YourImageShare"
 
 [project.urls]
 Homepage = "https://yourimageshare.com/about/api"
-Repository = "https://github.com/MediaShareORG/yourimageshare/tree/main/python"
+Repository = "https://github.com/yourimageshare/yourimageshare/tree/main/python"
 Issues = "https://yourimageshare.com/contact"
 
 [tool.setuptools.packages.find]

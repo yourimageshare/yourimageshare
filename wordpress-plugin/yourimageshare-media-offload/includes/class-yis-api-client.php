@@ -1,7 +1,7 @@
 <?php
 /**
  * Thin wrapper around YourImageShare's REST API (see
- * https://github.com/MediaShareORG/yourimageshare/blob/main/API.md),
+ * https://github.com/yourimageshare/yourimageshare/blob/main/API.md),
  * using only WordPress's HTTP API.
  *
  * Files up to 20 MB go up in one multipart/form-data request (WP_Http has

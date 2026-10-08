@@ -2,7 +2,7 @@ defmodule YourImageShare.MixProject do
   use Mix.Project
 
   @version "1.0.0"
-  @source_url "https://github.com/MediaShareORG/yourimageshare"
+  @source_url "https://github.com/yourimageshare/yourimageshare"
 
   def project do
     [

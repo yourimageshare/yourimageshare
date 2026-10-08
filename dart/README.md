@@ -10,7 +10,7 @@ upload API. One dependency (the Dart team's own `http` package), Dart 2.17+.
   [yourimageshare.com/my-account](https://yourimageshare.com/my-account).
 - **Full HTTP reference:** [yourimageshare.com/about/api](https://yourimageshare.com/about/api)
   or [API.md in this repo](../API.md).
-- Same API, same result shapes, in [JavaScript/TypeScript](https://www.npmjs.com/package/yourimageshare), [Python](https://pypi.org/project/yourimageshare/), [PHP](https://packagist.org/packages/yourimageshare/yourimageshare-php), [Go](https://pkg.go.dev/github.com/MediaShareORG/yourimageshare/go), [Rust](https://crates.io/crates/yourimageshare), and [Ruby](https://rubygems.org/gems/yourimageshare) too.
+- Same API, same result shapes, in [JavaScript/TypeScript](https://www.npmjs.com/package/yourimageshare), [Python](https://pypi.org/project/yourimageshare/), [PHP](https://packagist.org/packages/yourimageshare/yourimageshare-php), [Go](https://pkg.go.dev/github.com/yourimageshare/yourimageshare/go), [Rust](https://crates.io/crates/yourimageshare), and [Ruby](https://rubygems.org/gems/yourimageshare) too.
 
 ## Install
 

@@ -1,3 +1,3 @@
-module github.com/MediaShareORG/yourimageshare/go
+module github.com/yourimageshare/yourimageshare/go
 
 go 1.18

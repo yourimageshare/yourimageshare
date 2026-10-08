@@ -15,7 +15,7 @@
   "bugs": "https://yourimageshare.com/contact",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MediaShareORG/yourimageshare.git",
+    "url": "git+https://github.com/yourimageshare/yourimageshare.git",
     "directory": "discord"
   },
   "type": "module",

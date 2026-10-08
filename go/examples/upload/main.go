@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	yourimageshare "github.com/MediaShareORG/yourimageshare/go"
+	yourimageshare "github.com/yourimageshare/yourimageshare/go"
 )
 
 func main() {

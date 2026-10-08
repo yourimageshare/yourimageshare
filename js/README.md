@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/yourimageshare.svg)](https://www.npmjs.com/package/yourimageshare)
 [![npm downloads](https://img.shields.io/npm/dm/yourimageshare.svg)](https://www.npmjs.com/package/yourimageshare)
-[![license](https://img.shields.io/npm/l/yourimageshare.svg)](https://github.com/MediaShareORG/yourimageshare/blob/main/js/LICENSE)
+[![license](https://img.shields.io/npm/l/yourimageshare.svg)](https://github.com/yourimageshare/yourimageshare/blob/main/js/LICENSE)
 
 Official JavaScript/TypeScript SDK for the [YourImageShare](https://yourimageshare.com)
 upload API. Works in Node.js (18+) and in browsers - zero runtime dependencies,
@@ -11,7 +11,7 @@ built on native `fetch`/`FormData`/`Blob`.
 - **Get an API key:** sign in and open the **API** tab at
   [yourimageshare.com/my-account](https://yourimageshare.com/my-account).
 - **Full HTTP reference:** [yourimageshare.com/about/api](https://yourimageshare.com/about/api)
-  or [API.md in the yourimageshare-api repo](https://github.com/MediaShareORG/yourimageshare/blob/main/API.md).
+  or [API.md in the yourimageshare-api repo](https://github.com/yourimageshare/yourimageshare/blob/main/API.md).
 
 ## Install
 

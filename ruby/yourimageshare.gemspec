@@ -15,8 +15,8 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 2.7.0"
 
   spec.metadata["homepage_uri"]    = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/MediaShareORG/yourimageshare/tree/main/ruby"
-  spec.metadata["changelog_uri"]   = "https://github.com/MediaShareORG/yourimageshare/tree/main/ruby/README.md"
+  spec.metadata["source_code_uri"] = "https://github.com/yourimageshare/yourimageshare/tree/main/ruby"
+  spec.metadata["changelog_uri"]   = "https://github.com/yourimageshare/yourimageshare/tree/main/ruby/README.md"
 
   spec.files = Dir["lib/**/*.rb"] + ["README.md", "LICENSE"]
   spec.require_paths = ["lib"]

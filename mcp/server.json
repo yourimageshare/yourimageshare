@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.MediaShareORG/yourimageshare",
+  "name": "io.github.yourimageshare/yourimageshare",
   "description": "MCP server exposing the YourImageShare upload API (upload/list/delete) as tools for AI agents.",
   "repository": {
-    "url": "https://github.com/MediaShareORG/yourimageshare",
+    "url": "https://github.com/yourimageshare/yourimageshare",
     "source": "github",
     "subfolder": "mcp"
   },

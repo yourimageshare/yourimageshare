@@ -4,7 +4,7 @@ description: >-
   Official Dart/Flutter client for the YourImageShare upload API - upload,
   list, and delete files at https://yourimageshare.com.
 homepage: https://yourimageshare.com/about/api
-repository: https://github.com/MediaShareORG/yourimageshare
+repository: https://github.com/yourimageshare/yourimageshare
 documentation: https://pub.dev/documentation/yourimageshare/latest/
 issue_tracker: https://yourimageshare.com/contact
 

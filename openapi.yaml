@@ -11,7 +11,7 @@ info:
     url: https://yourimageshare.com/contact
   license:
     name: MIT
-    url: https://github.com/MediaShareORG/yourimageshare/blob/main/LICENSE
+    url: https://github.com/yourimageshare/yourimageshare/blob/main/LICENSE
 servers:
 - url: https://yourimageshare.com/api
   description: Production

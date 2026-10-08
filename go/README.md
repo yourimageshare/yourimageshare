@@ -1,6 +1,6 @@
 # yourimageshare-api/go
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/MediaShareORG/yourimageshare/go.svg)](https://pkg.go.dev/github.com/MediaShareORG/yourimageshare/go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yourimageshare/yourimageshare/go.svg)](https://pkg.go.dev/github.com/yourimageshare/yourimageshare/go)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Official Go SDK for the [YourImageShare](https://yourimageshare.com)
@@ -15,7 +15,7 @@ upload API. Zero third-party dependencies (standard library only), Go 1.18+.
 ## Install
 
 ```bash
-go get github.com/MediaShareORG/yourimageshare/go
+go get github.com/yourimageshare/yourimageshare/go
 ```
 
 ## Usage
@@ -26,7 +26,7 @@ package main
 import (
 	"fmt"
 
-	yourimageshare "github.com/MediaShareORG/yourimageshare/go"
+	yourimageshare "github.com/yourimageshare/yourimageshare/go"
 )
 
 func main() {

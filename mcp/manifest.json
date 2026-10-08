@@ -12,7 +12,7 @@
   "homepage": "https://yourimageshare.com/about/api",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MediaShareORG/yourimageshare"
+    "url": "https://github.com/yourimageshare/yourimageshare"
   },
   "license": "MIT",
   "keywords": [

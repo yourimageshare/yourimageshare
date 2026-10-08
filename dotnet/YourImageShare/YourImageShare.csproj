@@ -14,7 +14,7 @@
     <Description>Official .NET client for the YourImageShare upload API - upload, list, and delete files at https://yourimageshare.com. One dependency: Microsoft's own System.Text.Json.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://yourimageshare.com/about/api</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/MediaShareORG/yourimageshare</RepositoryUrl>
+    <RepositoryUrl>https://github.com/yourimageshare/yourimageshare</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>yourimageshare;image-hosting;file-upload;api-client</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

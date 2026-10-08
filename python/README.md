@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/yourimageshare.svg)](https://pypi.org/project/yourimageshare/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/yourimageshare.svg)](https://pypi.org/project/yourimageshare/)
-[![license](https://img.shields.io/pypi/l/yourimageshare.svg)](https://github.com/MediaShareORG/yourimageshare/blob/main/python/LICENSE)
+[![license](https://img.shields.io/pypi/l/yourimageshare.svg)](https://github.com/yourimageshare/yourimageshare/blob/main/python/LICENSE)
 
 Official Python SDK for the [YourImageShare](https://yourimageshare.com)
 upload API. One dependency (`requests`), Python 3.8+.
@@ -10,7 +10,7 @@ upload API. One dependency (`requests`), Python 3.8+.
 - **Get an API key:** sign in and open the **API** tab at
   [yourimageshare.com/my-account](https://yourimageshare.com/my-account).
 - **Full HTTP reference:** [yourimageshare.com/about/api](https://yourimageshare.com/about/api)
-  or [API.md in the yourimageshare-api repo](https://github.com/MediaShareORG/yourimageshare/blob/main/API.md).
+  or [API.md in the yourimageshare-api repo](https://github.com/yourimageshare/yourimageshare/blob/main/API.md).
 
 ## Install
 

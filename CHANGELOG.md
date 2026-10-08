@@ -112,7 +112,7 @@ per-package release notes.
   URL, not a direct file link; `src` is). Verified via a real MCP client
   connection (`tools/list`) that the schemas are well-formed before
   publishing, not just that it compiles.
-- `yourimageshare-mcp` 1.0.4: added `mcpName` (`io.github.MediaShareORG/yourimageshare`
+- `yourimageshare-mcp` 1.0.4: added `mcpName` (`io.github.yourimageshare/yourimageshare`
   - note the exact GitHub org casing; the registry's namespace check is
   case-sensitive, unlike GitHub login itself, so 1.0.3 shipped with a
   lowercased value that the registry rejected) to `package.json` and

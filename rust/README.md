@@ -14,7 +14,7 @@ for JSON.
   [yourimageshare.com/my-account](https://yourimageshare.com/my-account).
 - **Full HTTP reference:** [yourimageshare.com/about/api](https://yourimageshare.com/about/api)
   or [API.md in this repo](../API.md).
-- Same API, same result shapes, in [JavaScript/TypeScript](https://www.npmjs.com/package/yourimageshare), [Python](https://pypi.org/project/yourimageshare/), [PHP](https://packagist.org/packages/yourimageshare/yourimageshare-php), and [Go](https://pkg.go.dev/github.com/MediaShareORG/yourimageshare/go) too.
+- Same API, same result shapes, in [JavaScript/TypeScript](https://www.npmjs.com/package/yourimageshare), [Python](https://pypi.org/project/yourimageshare/), [PHP](https://packagist.org/packages/yourimageshare/yourimageshare-php), and [Go](https://pkg.go.dev/github.com/yourimageshare/yourimageshare/go) too.
 
 ## Install
 
