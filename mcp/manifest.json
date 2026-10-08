@@ -36,6 +36,28 @@
       }
     }
   },
+  "tools": [
+    {
+      "name": "upload_image",
+      "description": "Upload an image or video (up to 200 MB) from a local path, base64 content or a public link; returns direct, page and thumbnail links. Optional visibility (private/unlisted/public), title, description, auto-expiry."
+    },
+    {
+      "name": "list_uploads",
+      "description": "List your uploads, newest first, 50 per page."
+    },
+    {
+      "name": "get_upload",
+      "description": "Look up one upload by id: links, thumbnail, size, visibility, title and description."
+    },
+    {
+      "name": "update_upload",
+      "description": "Change the visibility, title or description of one of your uploads."
+    },
+    {
+      "name": "delete_upload",
+      "description": "Permanently delete one of your uploads by id."
+    }
+  ],
   "user_config": {
     "api_key": {
       "type": "string",
