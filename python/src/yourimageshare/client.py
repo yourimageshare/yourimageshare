@@ -52,8 +52,14 @@ class UploadResult:
     #: File size in bytes as stored.
     size: Optional[int] = None
     locked: bool = False
+    #: "private" (file only), "unlisted" (page for anyone with the link) or "public" (listed).
+    visibility: str = "unlisted"
+    title: Optional[str] = None
+    description: Optional[str] = None
     #: True if your account had already uploaded this exact file and that upload was returned.
     duplicate: bool = False
+    #: New uploads only: a private link that deletes the upload without an API key. Shown once.
+    delete_url: Optional[str] = None
 
 
 @dataclass
@@ -71,6 +77,8 @@ class ListedUpload:
     height: Optional[int] = None
     size: Optional[int] = None
     locked: bool = False
+    visibility: str = "unlisted"
+    description: Optional[str] = None
 
 
 @dataclass
@@ -130,12 +138,24 @@ class YourImageShare:
         return _build(UploadResult, self._parse(response)["data"])
 
     @staticmethod
-    def _fields(expires_in: Optional[int], allow_duplicate: bool) -> dict:
+    def _fields(
+        expires_in: Optional[int],
+        allow_duplicate: bool,
+        visibility: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> dict:
         data: dict[str, Any] = {}
         if expires_in is not None:
             data["expires_in"] = str(expires_in)
         if allow_duplicate:
             data["allow_duplicate"] = "1"
+        if visibility is not None:
+            data["visibility"] = visibility
+        if title is not None:
+            data["title"] = title
+        if description is not None:
+            data["description"] = description
         return data
 
     def upload(
@@ -145,6 +165,9 @@ class YourImageShare:
         filename: Optional[str] = None,
         expires_in: Optional[int] = None,
         allow_duplicate: bool = False,
+        visibility: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
         on_progress: Optional[Callable[[int, int], None]] = None,
     ) -> UploadResult:
         """Upload a file (up to 200 MB).
@@ -156,8 +179,14 @@ class YourImageShare:
         ``duplicate=True`` - pass ``allow_duplicate=True`` to store a new copy.
         Files over 90 MB are sent in 5 MB pieces automatically;
         ``on_progress(sent, total)`` is called after each piece.
+
+        ``visibility``: "unlisted" (server default - file and page work for
+        anyone with the link, not listed), "private" (file only, no page for
+        others) or "public" (listed and indexable). ``title`` up to 90
+        characters, ``description`` up to 500. New uploads carry a one-time
+        ``delete_url``.
         """
-        data = self._fields(expires_in, allow_duplicate)
+        data = self._fields(expires_in, allow_duplicate, visibility, title, description)
 
         opened = None
         try:
@@ -177,9 +206,18 @@ class YourImageShare:
             if opened is not None:
                 opened.close()
 
-    def upload_from_url(self, url: str, *, expires_in: Optional[int] = None, allow_duplicate: bool = False) -> UploadResult:
+    def upload_from_url(
+        self,
+        url: str,
+        *,
+        expires_in: Optional[int] = None,
+        allow_duplicate: bool = False,
+        visibility: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> UploadResult:
         """Upload from a public http(s) link: the server downloads the file itself (up to 200 MB)."""
-        data = self._fields(expires_in, allow_duplicate)
+        data = self._fields(expires_in, allow_duplicate, visibility, title, description)
         data["url"] = url
         return self._post_upload(data, timeout=max(self.timeout, 180))
 
@@ -217,6 +255,27 @@ class YourImageShare:
         uploads = [_build(ListedUpload, item) for item in body["data"]]
         meta = _build(ListMeta, body["meta"])
         return ListResult(data=uploads, meta=meta)
+
+    def get(self, upload_id: str) -> ListedUpload:
+        """One of your uploads (needs the full API key)."""
+        response = self._session.get(f"{self.base_url}/{upload_id}", timeout=self.timeout)
+        return _build(ListedUpload, self._parse(response)["data"])
+
+    def update(
+        self,
+        upload_id: str,
+        *,
+        visibility: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> ListedUpload:
+        """Change the visibility, title or description of one of your uploads (needs the full API key).
+
+        Only the arguments you pass are changed; an empty string clears a title/description.
+        """
+        changes = {k: v for k, v in (("visibility", visibility), ("title", title), ("description", description)) if v is not None}
+        response = self._session.patch(f"{self.base_url}/{upload_id}", json=changes, timeout=self.timeout)
+        return _build(ListedUpload, self._parse(response)["data"])
 
     def delete(self, upload_id: str) -> None:
         """Delete one of your uploads by id."""

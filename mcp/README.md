@@ -70,6 +70,21 @@ new copy. Returns `id`, `type`, `path`, `src`, `direct`, `thumb` (280 px
 WebP thumbnail), `width`, `height`, `size`, `locked`, `expires_at` and
 `duplicate` - store `src`, since `path` can change after conversion.
 
+Also optional: `visibility` (`unlisted` by default - file and page for
+anyone with the link; `private` - file only, no page for others; `public` -
+listed), `title` (90 characters) and `description` (500). New uploads return
+a one-time `delete_url`.
+
+### `get_upload`
+
+Requires `id`. Returns that upload's links, thumbnail, size, visibility,
+title and description.
+
+### `update_upload`
+
+Requires `id`, plus any of `visibility`, `title`, `description`. Only what
+you pass changes; an empty string clears a title or description.
+
 ### `list_uploads`
 
 Optional `page` (defaults to 1, 50 per page). Returns your uploads newest

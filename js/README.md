@@ -74,6 +74,18 @@ await client.upload(bytes, { filename: 'photo.jpg', allowDuplicate: true });
 await client.uploadFromUrl('https://example.com/photo.jpg');
 ```
 
+### Visibility, titles and changing an upload
+
+Each upload has a `visibility`: `unlisted` (the default - file and page work for anyone with the link, not listed anywhere), `private` (file only - the page link sends everyone but you to the file) or `public` (listed on the site). Uploads can carry a `title` (90 characters) and `description` (500). New uploads return a one-time `delete_url` that deletes the upload without an API key. `get`/`update` need the full API key.
+
+```ts
+const result = await client.upload(bytes, { filename: 'photo.jpg', visibility: 'private', title: 'Sunset' });
+console.log(result.delete_url); // shown once - keep it if you need it
+
+const one = await client.get(result.id);
+await client.update(result.id, { visibility: 'public', description: 'Lake at dusk' });
+```
+
 ### Error handling
 
 Failed requests throw `YourImageShareError` (message + HTTP `status`):

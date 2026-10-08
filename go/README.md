@@ -84,6 +84,19 @@ client.UploadURL("https://example.com/photo.jpg", nil)
 
 Pieces are only used by `Upload()` (a path, so the size is known); `UploadReader()` always sends one request.
 
+### Visibility, titles and changing an upload
+
+Each upload has a `visibility`: `unlisted` (the default - file and page work for anyone with the link, not listed anywhere), `private` (file only - the page link sends everyone but you to the file) or `public` (listed on the site). Uploads can carry a `title` (90 characters) and `description` (500). New uploads return a one-time `delete_url` that deletes the upload without an API key. `get`/`update` need the full API key.
+
+```go
+result, err := client.Upload("photo.jpg", &yourimageshare.UploadOptions{Visibility: "private", Title: "Sunset"})
+fmt.Println(result.DeleteURL) // shown once - keep it if you need it
+
+one, err := client.Get(result.ID)
+public := "public"
+_, err = client.Update(result.ID, yourimageshare.UpdateOptions{Visibility: &public})
+```
+
 ### Error handling
 
 Failed requests return a `*yourimageshare.APIError` (`.Status` is the

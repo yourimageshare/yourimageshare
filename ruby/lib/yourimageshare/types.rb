@@ -7,23 +7,29 @@ module YourImageShare
   # thumb is a 280 px WebP thumbnail (or nil); size is in bytes; duplicate is
   # true when your account already had this exact file and that upload was
   # returned.
+  # visibility is "private" (file only), "unlisted" (page for anyone with the
+  # link) or "public" (listed); delete_url (new uploads only) deletes the
+  # upload without an API key and is shown once.
   UploadResult = Struct.new(:id, :type, :path, :src, :direct, :thumb, :width, :height, :size, :locked,
-                            :expires_at, :duplicate, keyword_init: true) do
+                            :visibility, :title, :description, :expires_at, :duplicate, :delete_url,
+                            keyword_init: true) do
     def self.from_json(h)
       new(id: h["id"], type: h["type"], path: h["path"], src: h["src"], direct: h["direct"],
           thumb: h["thumb"], width: h["width"], height: h["height"], size: h["size"],
-          locked: h["locked"] == true, expires_at: h["expires_at"], duplicate: h["duplicate"] == true)
+          locked: h["locked"] == true, visibility: h["visibility"], title: h["title"],
+          description: h["description"], expires_at: h["expires_at"], duplicate: h["duplicate"] == true,
+          delete_url: h["delete_url"])
     end
   end
 
   # One row of a #list result.
   ListedUpload = Struct.new(:id, :type, :title, :path, :src, :direct, :thumb, :width, :height, :size, :locked,
-                            :expires_at, :created_at, keyword_init: true) do
+                            :visibility, :description, :expires_at, :created_at, keyword_init: true) do
     def self.from_json(h)
       new(id: h["id"], type: h["type"], title: h["title"], path: h["path"],
           src: h["src"], direct: h["direct"], thumb: h["thumb"], width: h["width"], height: h["height"],
-          size: h["size"], locked: h["locked"] == true, expires_at: h["expires_at"],
-          created_at: h["created_at"])
+          size: h["size"], locked: h["locked"] == true, visibility: h["visibility"],
+          description: h["description"], expires_at: h["expires_at"], created_at: h["created_at"])
     end
   end
 

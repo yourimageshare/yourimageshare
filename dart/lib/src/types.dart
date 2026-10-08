@@ -22,11 +22,21 @@ class UploadResult {
 
   /// True if the upload is password-protected.
   final bool locked;
+
+  /// `private` (file only), `unlisted` (page for anyone with the link) or
+  /// `public` (listed).
+  final String visibility;
+  final String? title;
+  final String? description;
   final String? expiresAt;
 
   /// True if your account had already uploaded this exact file and that
   /// upload was returned instead of a new one.
   final bool duplicate;
+
+  /// New uploads only: a private link that deletes the upload without an
+  /// API key. Shown once.
+  final String? deleteUrl;
 
   UploadResult({
     required this.id,
@@ -39,8 +49,12 @@ class UploadResult {
     this.height,
     this.size,
     this.locked = false,
+    this.visibility = 'unlisted',
+    this.title,
+    this.description,
     this.expiresAt,
     this.duplicate = false,
+    this.deleteUrl,
   });
 
   factory UploadResult.fromJson(Map<String, dynamic> json) => UploadResult(
@@ -54,8 +68,12 @@ class UploadResult {
         height: json['height'] as int?,
         size: json['size'] as int?,
         locked: json['locked'] == true,
+        visibility: (json['visibility'] as String?) ?? 'unlisted',
+        title: json['title'] as String?,
+        description: json['description'] as String?,
         expiresAt: json['expires_at'] as String?,
         duplicate: json['duplicate'] == true,
+        deleteUrl: json['delete_url'] as String?,
       );
 }
 
@@ -72,6 +90,8 @@ class ListedUpload {
   final int? height;
   final int? size;
   final bool locked;
+  final String visibility;
+  final String? description;
   final String? expiresAt;
   final String createdAt;
 
@@ -87,6 +107,8 @@ class ListedUpload {
     this.height,
     this.size,
     this.locked = false,
+    this.visibility = 'unlisted',
+    this.description,
     this.expiresAt,
     required this.createdAt,
   });
@@ -103,6 +125,8 @@ class ListedUpload {
         height: json['height'] as int?,
         size: json['size'] as int?,
         locked: json['locked'] == true,
+        visibility: (json['visibility'] as String?) ?? 'unlisted',
+        description: json['description'] as String?,
         expiresAt: json['expires_at'] as String?,
         createdAt: json['created_at'] as String,
       );

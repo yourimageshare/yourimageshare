@@ -60,6 +60,10 @@ defmodule YourImageShare.Client do
       `duplicate: true`).
     * `:on_progress` - `fn sent, total -> ... end`, called after each piece
       of a chunked upload.
+    * `:visibility` - `"unlisted"` (server default: file and page work for
+      anyone with the link), `"private"` (file only, no page for others) or
+      `"public"` (listed).
+    * `:title` (up to 90 characters), `:description` (up to 500).
   """
   @spec upload(t(), Path.t(), keyword()) :: {:ok, UploadResult.t()} | {:error, APIError.t()}
   def upload(%__MODULE__{} = client, file_path, opts \\ []) do
@@ -152,11 +156,20 @@ defmodule YourImageShare.Client do
   defp upload_fields(opts) do
     expires_in = Keyword.get(opts, :expires_in)
 
-    if(is_integer(expires_in) and expires_in > 0,
-      do: [expires_in: Integer.to_string(expires_in)],
-      else: []
-    ) ++
-      if(Keyword.get(opts, :allow_duplicate), do: [allow_duplicate: "1"], else: [])
+    expires =
+      if is_integer(expires_in) and expires_in > 0,
+        do: [expires_in: Integer.to_string(expires_in)],
+        else: []
+
+    duplicate = if Keyword.get(opts, :allow_duplicate), do: [allow_duplicate: "1"], else: []
+
+    # :visibility ("private", "unlisted", "public" or an atom), :title, :description
+    text =
+      for key <- [:visibility, :title, :description],
+          opts[key] != nil,
+          do: {key, to_string(opts[key])}
+
+    expires ++ duplicate ++ text
   end
 
   @doc "Same as `upload/3`, but raises `YourImageShare.APIError` instead of returning `{:error, _}`."
@@ -198,6 +211,37 @@ defmodule YourImageShare.Client do
   @spec list!(t(), keyword()) :: ListResult.t()
   def list!(%__MODULE__{} = client, opts \\ []) do
     bang!(list(client, opts))
+  end
+
+  @doc "One of your uploads (needs the full API key)."
+  @spec get(t(), String.t()) :: {:ok, YourImageShare.ListedUpload.t()} | {:error, APIError.t()}
+  def get(%__MODULE__{} = client, id) do
+    client
+    |> request(:get, String.trim_trailing(client.base_url, "/") <> "/" <> URI.encode_www_form(id))
+    |> decode(fn %{"data" => data} -> YourImageShare.ListedUpload.from_map(data) end)
+  end
+
+  @doc """
+  Changes the visibility (`"private"`, `"unlisted"`, `"public"`), title or
+  description of one of your uploads (needs the full API key). Pass any of
+  `:visibility`, `:title`, `:description`; an empty string clears a
+  title/description.
+  """
+  @spec update(t(), String.t(), keyword()) ::
+          {:ok, YourImageShare.ListedUpload.t()} | {:error, APIError.t()}
+  def update(%__MODULE__{} = client, id, changes) do
+    body =
+      changes
+      |> Keyword.take([:visibility, :title, :description])
+      |> Map.new(fn {key, value} -> {key, to_string(value)} end)
+
+    client
+    |> request(
+      :patch,
+      String.trim_trailing(client.base_url, "/") <> "/" <> URI.encode_www_form(id),
+      json: body
+    )
+    |> decode(fn %{"data" => data} -> YourImageShare.ListedUpload.from_map(data) end)
   end
 
   @doc "Removes one of your uploads by id. Returns `{:error, %APIError{}}` on a 404/401."

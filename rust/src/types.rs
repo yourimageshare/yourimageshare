@@ -26,11 +26,23 @@ pub struct UploadResult {
     /// True if the upload is password-protected.
     #[serde(default)]
     pub locked: bool,
+    /// `"private"` (file only), `"unlisted"` (page for anyone with the link)
+    /// or `"public"` (listed).
+    #[serde(default)]
+    pub visibility: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
     pub expires_at: Option<String>,
     /// True if your account had already uploaded this exact file and that
     /// upload was returned instead of a new one.
     #[serde(default)]
     pub duplicate: bool,
+    /// New uploads only: a private link that deletes the upload without an
+    /// API key. Shown once.
+    #[serde(default)]
+    pub delete_url: Option<String>,
 }
 
 /// One row of a `list()` result.
@@ -53,6 +65,10 @@ pub struct ListedUpload {
     pub size: Option<u64>,
     #[serde(default)]
     pub locked: bool,
+    #[serde(default)]
+    pub visibility: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
     pub expires_at: Option<String>,
     pub created_at: String,
 }

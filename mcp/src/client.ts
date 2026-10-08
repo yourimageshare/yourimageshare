@@ -15,21 +15,35 @@ export interface Upload {
   height: number | null;
   size: number | null;
   locked: boolean;
+  visibility: Visibility;
+  title: string | null;
+  description: string | null;
   expires_at: string | null;
 }
 
+export type Visibility = 'private' | 'unlisted' | 'public';
+
 export interface UploadResult extends Upload {
   duplicate: boolean;
+  delete_url?: string;
 }
 
 export interface ListedUpload extends Upload {
-  title: string | null;
   created_at: string;
 }
 
 export interface UploadOptions {
   expiresIn?: number;
   allowDuplicate?: boolean;
+  visibility?: Visibility;
+  title?: string;
+  description?: string;
+}
+
+export interface UpdateOptions {
+  visibility?: Visibility;
+  title?: string;
+  description?: string;
 }
 
 export interface ListResult {
@@ -86,6 +100,9 @@ export class YourImageShareClient {
     if (options.allowDuplicate) {
       form.append('allow_duplicate', '1');
     }
+    if (options.visibility) form.append('visibility', options.visibility);
+    if (options.title !== undefined) form.append('title', options.title);
+    if (options.description !== undefined) form.append('description', options.description);
     const res = await fetch(this.baseUrl, { method: 'POST', headers: this.headers(), body: form });
     const body = await this.parse<{ data: UploadResult }>(res);
     return body.data;
@@ -141,6 +158,20 @@ export class YourImageShareClient {
     if (page > 1) url.searchParams.set('page', String(page));
     const res = await fetch(url, { headers: this.headers() });
     return this.parse<ListResult>(res);
+  }
+
+  async get(id: string): Promise<ListedUpload> {
+    const res = await fetch(`${this.baseUrl}/${encodeURIComponent(id)}`, { headers: this.headers() });
+    return (await this.parse<{ data: ListedUpload }>(res)).data;
+  }
+
+  async update(id: string, changes: UpdateOptions): Promise<ListedUpload> {
+    const res = await fetch(`${this.baseUrl}/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...(this.headers() as Record<string, string>), 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    return (await this.parse<{ data: ListedUpload }>(res)).data;
   }
 
   async delete(id: string): Promise<void> {

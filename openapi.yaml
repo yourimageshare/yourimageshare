@@ -63,6 +63,21 @@ paths:
                 allow_duplicate:
                   type: boolean
                   description: Store a new copy even if this account already uploaded the exact same file.
+                visibility: &id004
+                  type: string
+                  enum:
+                  - private
+                  - unlisted
+                  - public
+                  default: unlisted
+                  description: 'unlisted: file and page work for anyone with the link, not listed. private: file only - the
+                    page link sends everyone but the owner to the file. public: listed and indexable.'
+                title: &id005
+                  type: string
+                  maxLength: 90
+                description: &id006
+                  type: string
+                  maxLength: 500
               description: 'Send one of: "uploads" (a file, up to 100MB), "url" (a link, up to 200MB) or "upload_id" (pieces
                 sent to POST /chunk, up to 200MB).'
       responses:
@@ -84,11 +99,11 @@ paths:
                   expires_at: null
         '401': &id001
           $ref: '#/components/responses/Unauthorized'
-        '403': &id002
+        '403': &id011
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
-        '429': &id003
+        '429': &id002
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerError'
@@ -133,7 +148,7 @@ paths:
       description: 'Permanently deletes one of the authenticated account''s uploads. Cannot be undone from the API.
 
         '
-      parameters:
+      parameters: &id003
       - name: id
         in: path
         required: true
@@ -160,6 +175,59 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerError'
+    get:
+      operationId: getUpload
+      summary: Get one upload
+      description: One of your uploads (full API key).
+      responses:
+        '200': &id008
+          description: The upload.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                    - success
+                  data:
+                    $ref: '#/components/schemas/Upload'
+        '401': *id001
+        '404': &id009
+          description: No such upload on this account.
+          content: &id010
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429': *id002
+      parameters: *id003
+    patch:
+      operationId: updateUpload
+      summary: Change an upload
+      description: Change visibility, title or description of one of your uploads (full API key). An empty title/description
+        clears it.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: &id007
+              type: object
+              properties:
+                visibility: *id004
+                title: *id005
+                description: *id006
+          application/json:
+            schema: *id007
+      responses:
+        '200': *id008
+        '401': *id001
+        '404': *id009
+        '429': *id002
+        '422':
+          description: Nothing to change, or an invalid value.
+          content: *id010
+      parameters: *id003
   /chunk:
     post:
       operationId: uploadChunk
@@ -216,14 +284,14 @@ paths:
                     type: integer
                     example: 5242880
         '401': *id001
-        '403': *id002
+        '403': *id011
         '422':
           description: Invalid piece, too many unfinished uploads, or uploads temporarily unavailable.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '429': *id003
+        '429': *id002
 components:
   securitySchemes:
     apiKeyQuery:
@@ -307,6 +375,20 @@ components:
           type: boolean
           description: 'Upload response only: true if this account had already uploaded the exact same file and that upload
             was returned instead of a new one.'
+        visibility:
+          type: string
+          enum:
+          - private
+          - unlisted
+          - public
+        description:
+          type: string
+          nullable: true
+        delete_url:
+          type: string
+          format: uri
+          description: 'Upload response only (new uploads, not duplicates): a private link that deletes the upload without
+            an API key. Shown once.'
       required:
       - id
       - type

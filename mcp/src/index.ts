@@ -30,7 +30,7 @@ const server = new McpServer({
 
 /** Only the fields declared in the output schemas: MCP clients reject structured content with fields the
  *  schema doesn't list, so a field the API adds later must not reach them unannounced. */
-const LINK_FIELDS = ['id', 'type', 'path', 'src', 'direct', 'thumb', 'width', 'height', 'size', 'locked', 'expires_at'] as const;
+const LINK_FIELDS = ['id', 'type', 'path', 'src', 'direct', 'thumb', 'width', 'height', 'size', 'locked', 'visibility', 'title', 'description', 'expires_at'] as const;
 function pick(item: Record<string, unknown>, extra: string[]) {
   const out: Record<string, unknown> = {};
   for (const key of [...LINK_FIELDS, ...extra]) {
@@ -47,6 +47,13 @@ function errorResult(err: unknown) {
 // Shared field descriptions for the link object returned by upload_image and
 // present in each list_uploads row - kept as one definition so the two tools
 // stay consistent instead of drifting.
+const visibilityInput = z
+  .enum(['private', 'unlisted', 'public'])
+  .optional()
+  .describe(
+    'unlisted (default): file and page work for anyone with the link, not listed. private: file only - the page link sends everyone but the owner to the file. public: listed on the site and indexable.',
+  );
+
 const uploadFields = {
   id: z.string().describe('Unique identifier for this upload. Pass to delete_upload to remove it.'),
   type: z.enum(['image', 'video']),
@@ -64,6 +71,12 @@ const uploadFields = {
   height: z.number().nullable().optional().describe('Height in pixels, or null if unknown.'),
   size: z.number().nullable().optional().describe('File size in bytes as stored.'),
   locked: z.boolean().optional().describe('True if the upload is password-protected.'),
+  visibility: z
+    .enum(['private', 'unlisted', 'public'])
+    .optional()
+    .describe('private: file only, no page for others. unlisted: file and page work for anyone with the link. public: listed on the site.'),
+  title: z.string().nullable().optional().describe('Title, or null.'),
+  description: z.string().nullable().optional().describe('Description, or null.'),
   expires_at: z.string().nullable().describe('ISO 8601 auto-delete timestamp, or null if the upload never expires.'),
 };
 
@@ -89,6 +102,9 @@ server.registerTool(
         .boolean()
         .optional()
         .describe('Store a new copy even if this account already uploaded the exact same file.'),
+      visibility: visibilityInput,
+      title: z.string().max(90).optional().describe('Title shown on the upload page (up to 90 characters).'),
+      description: z.string().max(500).optional().describe('Description (up to 500 characters).'),
       expiresIn: z
         .number()
         .int()
@@ -100,6 +116,10 @@ server.registerTool(
     outputSchema: {
       ...uploadFields,
       duplicate: z.boolean().optional().describe('True if this exact file was already on your account and that upload was returned.'),
+      delete_url: z
+        .string()
+        .optional()
+        .describe('New uploads only: a private link that deletes the upload without an API key. Shown once - give it to the user if they may want it.'),
     },
     annotations: {
       title: 'Upload an image or video',
@@ -109,7 +129,7 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ path, base64, filename, url, expiresIn, allowDuplicate }) => {
+  async ({ path, base64, filename, url, expiresIn, allowDuplicate, visibility, title, description }) => {
     try {
       let blob: Blob;
       let name: string;
@@ -117,7 +137,7 @@ server.registerTool(
       if ([path, base64, url].filter((v) => v !== undefined).length > 1) {
         return { content: [{ type: 'text', text: 'Error: provide only one of `path`, `base64` or `url`.' }], isError: true };
       } else if (url) {
-        const result = pick({ ...(await client.uploadFromUrl(url, { expiresIn, allowDuplicate })) }, ['duplicate']);
+        const result = pick({ ...(await client.uploadFromUrl(url, { expiresIn, allowDuplicate, visibility, title, description })) }, ['duplicate', 'delete_url']);
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
       } else if (path) {
         const buffer = await readFile(path);
@@ -133,7 +153,7 @@ server.registerTool(
         return { content: [{ type: 'text', text: 'Error: provide `path`, `base64` + `filename`, or `url`.' }], isError: true };
       }
 
-      const result = pick({ ...(await client.upload(blob, name, { expiresIn, allowDuplicate })) }, ['duplicate']);
+      const result = pick({ ...(await client.upload(blob, name, { expiresIn, allowDuplicate, visibility, title, description })) }, ['duplicate', 'delete_url']);
       return {
         content: [
           {
@@ -165,7 +185,6 @@ server.registerTool(
       data: z.array(
         z.object({
           ...uploadFields,
-          title: z.string().nullable().describe('User-set title, or null if never set.'),
           created_at: z.string().describe('ISO 8601 upload timestamp.'),
         }),
       ),
@@ -187,9 +206,59 @@ server.registerTool(
     try {
       const raw = await client.list(page ?? 1);
       const result = {
-        data: raw.data.map((item) => pick({ ...item }, ['title', 'created_at'])),
+        data: raw.data.map((item) => pick({ ...item }, ['created_at'])),
         meta: { current_page: raw.meta.current_page, last_page: raw.meta.last_page, total: raw.meta.total },
       };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
+    } catch (err) {
+      return errorResult(err);
+    }
+  },
+);
+
+const oneUploadOutput = { ...uploadFields, created_at: z.string().describe('ISO 8601 upload timestamp.') };
+
+server.registerTool(
+  'get_upload',
+  {
+    title: 'Get one upload',
+    description: "Look up one of your uploads by `id`: its links, thumbnail, size, visibility, title and description.",
+    inputSchema: { id: z.string().describe('The upload id (from upload_image or list_uploads).') },
+    outputSchema: oneUploadOutput,
+    annotations: { title: 'Get one upload', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ id }) => {
+    try {
+      const result = pick({ ...(await client.get(id)) }, ['created_at']);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
+    } catch (err) {
+      return errorResult(err);
+    }
+  },
+);
+
+server.registerTool(
+  'update_upload',
+  {
+    title: 'Change an upload',
+    description:
+      'Change the visibility, title or description of one of your uploads. Only the fields you pass change; an ' +
+      'empty string clears a title or description. Making an upload public lists it on the site.',
+    inputSchema: {
+      id: z.string().describe('The upload id (from upload_image or list_uploads).'),
+      visibility: visibilityInput,
+      title: z.string().max(90).optional().describe('New title (up to 90 characters); empty string clears it.'),
+      description: z.string().max(500).optional().describe('New description (up to 500 characters); empty string clears it.'),
+    },
+    outputSchema: oneUploadOutput,
+    annotations: { title: 'Change an upload', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ id, visibility, title, description }) => {
+    if (visibility === undefined && title === undefined && description === undefined) {
+      return { content: [{ type: 'text', text: 'Error: pass at least one of `visibility`, `title`, `description`.' }], isError: true };
+    }
+    try {
+      const result = pick({ ...(await client.update(id, { visibility, title, description })) }, ['created_at']);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], structuredContent: result };
     } catch (err) {
       return errorResult(err);

@@ -69,6 +69,18 @@ YourImageShare.Client.upload(client, "photo.jpg", allow_duplicate: true)
 YourImageShare.Client.upload_url(client, "https://example.com/photo.jpg")
 ```
 
+### Visibility, titles and changing an upload
+
+Each upload has a `visibility`: `unlisted` (the default - file and page work for anyone with the link, not listed anywhere), `private` (file only - the page link sends everyone but you to the file) or `public` (listed on the site). Uploads can carry a `title` (90 characters) and `description` (500). New uploads return a one-time `delete_url` that deletes the upload without an API key. `get`/`update` need the full API key.
+
+```elixir
+{:ok, result} = YourImageShare.Client.upload(client, "photo.jpg", visibility: "private", title: "Sunset")
+result.delete_url # shown once - keep it if you need it
+
+{:ok, one} = YourImageShare.Client.get(client, result.id)
+{:ok, _} = YourImageShare.Client.update(client, result.id, visibility: "public", description: "Lake at dusk")
+```
+
 ### Error handling
 
 Every function returns `{:ok, result} | {:error, %YourImageShare.APIError{}}`

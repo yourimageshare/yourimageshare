@@ -68,6 +68,24 @@ client.upload_url("https://example.com/photo.jpg", None)?;
 
 Pieces are only used by `upload()` (a path, so the size is known); `upload_reader()` always sends one request. **1.1.0 note:** `UploadOptions` gained `allow_duplicate` - build it with `..Default::default()` as above.
 
+### Visibility, titles and changing an upload
+
+Each upload has a `visibility`: `unlisted` (the default - file and page work for anyone with the link, not listed anywhere), `private` (file only - the page link sends everyone but you to the file) or `public` (listed on the site). Uploads can carry a `title` (90 characters) and `description` (500). New uploads return a one-time `delete_url` that deletes the upload without an API key. `get`/`update` need the full API key.
+
+```rust
+use yourimageshare::{UpdateOptions, UploadOptions, Visibility};
+
+let result = client.upload("photo.jpg", Some(UploadOptions {
+    visibility: Some(Visibility::Private),
+    title: Some("Sunset".into()),
+    ..Default::default()
+}))?;
+println!("{:?}", result.delete_url); // shown once - keep it if you need it
+
+let one = client.get(&result.id)?;
+client.update(&result.id, &UpdateOptions { visibility: Some(Visibility::Public), ..Default::default() })?;
+```
+
 ### Error handling
 
 Failed requests return an `ApiError` (`.status` is the HTTP status code,

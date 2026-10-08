@@ -51,8 +51,19 @@ per-package release notes.
     `{:ok, :ok}`).
   - MCP server: `upload_image` takes `url` and `allowDuplicate`; the MCP
     registry name is now `io.github.yourimageshare/yourimageshare`.
-- Postman collection: `Upload Piece (large files)` request and the new upload
-  fields.
+- **API: visibility, titles, delete links, one-upload endpoints.** Uploads
+  take `visibility` (`unlisted` default, `private` = file only with no page
+  for anyone but the owner, `public` = listed), `title` and `description`;
+  responses carry them plus a one-time `delete_url` on new uploads.
+  New `GET /api/{id}` and `PATCH /api/{id}` (full API key). All SDKs gained
+  the options and `get`/`update` methods; the MCP server gained
+  `get_upload` and `update_upload` tools. Rust: `UploadOptions` is no
+  longer `Copy` (it now holds the title/description strings).
+- **WordPress plugin** uploads as `private`. **Forum plugins 1.1.0** (and the
+  live `forum-upload.js`) upload as `private` by default, configurable per
+  forum (`window.YIS_VISIBILITY` / each plugin's setting).
+- Postman collection: `Upload Piece (large files)`, `Get Upload`,
+  `Update Upload` requests and the new upload fields.
 
 - **The `X-API-Key` header now takes precedence over `?key=`** when both
   are present (previously the query parameter won). `?key=` still works

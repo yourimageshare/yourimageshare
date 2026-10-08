@@ -23,11 +23,28 @@ export interface UploadOptions {
   filename?: string;
   /** Store a new copy even if your account already uploaded this exact file (otherwise the existing upload is returned with `duplicate: true`). */
   allowDuplicate?: boolean;
+  /**
+   * `unlisted` (server default): file and page work for anyone with the link, not listed anywhere.
+   * `private`: file only - the page link sends everyone but you to the file. `public`: listed and indexable.
+   */
+  visibility?: Visibility;
+  /** Up to 90 characters. */
+  title?: string;
+  /** Up to 500 characters. */
+  description?: string;
   /** Called after each piece of a chunked upload (files over 90 MB) with bytes sent so far and the total. */
   onProgress?: (sent: number, total: number) => void;
 }
 
 export type UploadType = 'image' | 'video';
+export type Visibility = 'private' | 'unlisted' | 'public';
+
+/** Fields `update()` can change; an empty string clears a title/description. */
+export interface UpdateOptions {
+  visibility?: Visibility;
+  title?: string;
+  description?: string;
+}
 
 export interface Upload {
   id: string;
@@ -46,16 +63,20 @@ export interface Upload {
   size: number | null;
   /** True if the upload is password-protected. */
   locked: boolean;
+  visibility: Visibility;
+  title: string | null;
+  description: string | null;
   expires_at: string | null;
 }
 
 export interface UploadResult extends Upload {
   /** True if your account had already uploaded this exact file and that upload was returned. */
   duplicate: boolean;
+  /** New uploads only: a private link that deletes the upload without an API key. Shown once - keep it if you need it. */
+  delete_url?: string;
 }
 
 export interface ListedUpload extends Upload {
-  title: string | null;
   created_at: string;
 }
 
@@ -121,6 +142,15 @@ export class YourImageShare {
     }
     if (options.allowDuplicate) {
       form.append('allow_duplicate', '1');
+    }
+    if (options.visibility) {
+      form.append('visibility', options.visibility);
+    }
+    if (options.title !== undefined) {
+      form.append('title', options.title);
+    }
+    if (options.description !== undefined) {
+      form.append('description', options.description);
     }
     return form;
   }
@@ -197,6 +227,24 @@ export class YourImageShare {
     }
     const res = await fetch(url, { headers: this.headers() });
     return this.parseJson<ListResult>(res);
+  }
+
+  /** One of your uploads (needs the full API key). */
+  async get(id: string): Promise<ListedUpload> {
+    const res = await fetch(`${this.baseUrl}/${encodeURIComponent(id)}`, { headers: this.headers() });
+    return (await this.parseJson<{ data: ListedUpload }>(res)).data;
+  }
+
+  /** Change the visibility, title or description of one of your uploads (needs the full API key). */
+  async update(id: string, changes: UpdateOptions): Promise<ListedUpload> {
+    const headers = new Headers(this.headers());
+    headers.set('Content-Type', 'application/json');
+    const res = await fetch(`${this.baseUrl}/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(changes),
+    });
+    return (await this.parseJson<{ data: ListedUpload }>(res)).data;
   }
 
   /** Delete one of your uploads by id. */

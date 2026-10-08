@@ -112,6 +112,27 @@
               "type": "text",
               "disabled": true,
               "description": "Store a new copy even if this account already uploaded the exact same file."
+            },
+            {
+              "key": "visibility",
+              "value": "unlisted",
+              "type": "text",
+              "disabled": true,
+              "description": "unlisted (default): file and page for anyone with the link. private: file only. public: listed."
+            },
+            {
+              "key": "title",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "Up to 90 characters."
+            },
+            {
+              "key": "description",
+              "value": "",
+              "type": "text",
+              "disabled": true,
+              "description": "Up to 500 characters."
             }
           ]
         },
@@ -214,6 +235,56 @@
           ]
         },
         "description": "Lists the authenticated account's own uploads, newest first, 50 per page.\n\nResponses:\n- 200: `{ \"type\": \"success\", \"data\": [ { \"id\", \"type\", \"title\", \"path\", \"src\", \"direct\", \"expires_at\", \"created_at\" }, ... ], \"meta\": { \"current_page\", \"last_page\", \"total\" } }`\n- 401: missing/invalid API key"
+      }
+    },
+    {
+      "name": "Get Upload",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/{{upload_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "{{upload_id}}"
+          ]
+        },
+        "description": "One of your uploads (full API key)."
+      }
+    },
+    {
+      "name": "Update Upload",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"visibility\": \"public\",\n  \"title\": \"Sunset\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/{{upload_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "{{upload_id}}"
+          ]
+        },
+        "description": "Change visibility, title or description of one of your uploads (full API key). An empty title/description clears it."
       }
     },
     {

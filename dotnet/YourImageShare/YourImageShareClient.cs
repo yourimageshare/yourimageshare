@@ -99,6 +99,18 @@ namespace YourImageShare
             {
                 content.Add(new StringContent("1"), "allow_duplicate");
             }
+            if (!string.IsNullOrEmpty(options?.Visibility))
+            {
+                content.Add(new StringContent(options!.Visibility!), "visibility");
+            }
+            if (options?.Title != null)
+            {
+                content.Add(new StringContent(options.Title), "title");
+            }
+            if (options?.Description != null)
+            {
+                content.Add(new StringContent(options.Description), "description");
+            }
 
             using var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl) { Content = content };
             SetCommonHeaders(request);
@@ -169,6 +181,30 @@ namespace YourImageShare
                 ?? throw new YourImageShareException(0, "internal: empty response body");
         }
 
+        /// <summary>One of your uploads (needs the full API key).</summary>
+        public async Task<ListedUpload> GetAsync(string id, CancellationToken ct = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, _baseUrl.TrimEnd('/') + "/" + Uri.EscapeDataString(id));
+            SetCommonHeaders(request);
+            var raw = await SendAsync(request, ct).ConfigureAwait(false);
+            return JsonSerializer.Deserialize<OneEnvelope>(raw, JsonOptions)?.Data
+                ?? throw new YourImageShareException(0, "internal: empty response body");
+        }
+
+        /// <summary>Changes the visibility, title or description of one of your uploads (needs the full API key).</summary>
+        public async Task<ListedUpload> UpdateAsync(string id, UpdateOptions changes, CancellationToken ct = default)
+        {
+            var json = JsonSerializer.Serialize(changes, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            using var request = new HttpRequestMessage(new HttpMethod("PATCH"), _baseUrl.TrimEnd('/') + "/" + Uri.EscapeDataString(id))
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            };
+            SetCommonHeaders(request);
+            var raw = await SendAsync(request, ct).ConfigureAwait(false);
+            return JsonSerializer.Deserialize<OneEnvelope>(raw, JsonOptions)?.Data
+                ?? throw new YourImageShareException(0, "internal: empty response body");
+        }
+
         /// <summary>Removes one of your uploads by id. Throws a <see cref="YourImageShareException"/> on a 404/401.</summary>
         public async Task DeleteAsync(string id, CancellationToken ct = default)
         {
@@ -224,6 +260,12 @@ namespace YourImageShare
 
                 return raw;
             }
+        }
+
+        private sealed class OneEnvelope
+        {
+            [JsonPropertyName("data")]
+            public ListedUpload? Data { get; set; }
         }
 
         private sealed class UploadEnvelope

@@ -1,5 +1,5 @@
 use crate::error::ApiError;
-use crate::types::{ApiEnvelope, ListResult, UploadResult};
+use crate::types::{ApiEnvelope, ListResult, ListedUpload, UploadResult};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::fs::File;
@@ -24,8 +24,38 @@ pub struct Client {
     timeout: Duration,
 }
 
+/// Who can see an upload's page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visibility {
+    /// File only: the page link sends everyone but you straight to the file.
+    Private,
+    /// File and page work for anyone with the link, but it isn't listed (the server's default).
+    Unlisted,
+    /// Listed on the site and indexable.
+    Public,
+}
+
+impl Visibility {
+    fn as_str(self) -> &'static str {
+        match self {
+            Visibility::Private => "private",
+            Visibility::Unlisted => "unlisted",
+            Visibility::Public => "public",
+        }
+    }
+}
+
+/// Fields [`Client::update`] changes; `None` leaves a field as it is, an
+/// empty string clears a title/description.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateOptions {
+    pub visibility: Option<Visibility>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
 /// Optional parameters for [`Client::upload`]/[`Client::upload_reader`].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct UploadOptions {
     /// Auto-deletes the upload after this many seconds (60 to 2,592,000 =
     /// 30 days). `None` or `Some(0)` means a permanent upload.
@@ -33,6 +63,12 @@ pub struct UploadOptions {
     /// Store a new copy even if your account already uploaded this exact
     /// file (otherwise that upload is returned with `duplicate: true`).
     pub allow_duplicate: bool,
+    /// Who can see the upload's page; `None` = the server default (unlisted).
+    pub visibility: Option<Visibility>,
+    /// Up to 90 characters.
+    pub title: Option<String>,
+    /// Up to 500 characters.
+    pub description: Option<String>,
 }
 
 impl Client {
@@ -182,9 +218,11 @@ impl Client {
             epilogue.extend_from_slice(expires_in.to_string().as_bytes());
             epilogue.extend_from_slice(b"\r\n");
         }
-        if opts.allow_duplicate {
+        let mut extra = Vec::new();
+        push_options(&mut extra, &UploadOptions { expires_in: None, ..opts.clone() });
+        for (name, value) in extra {
             epilogue.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
-            epilogue.extend_from_slice(b"Content-Disposition: form-data; name=\"allow_duplicate\"\r\n\r\n1\r\n");
+            epilogue.extend_from_slice(format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes());
         }
         epilogue.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
 
@@ -226,6 +264,52 @@ impl Client {
         }
 
         call::<ListResult>(request.call())
+    }
+
+    /// One of your uploads (needs the full API key).
+    pub fn get(&self, id: &str) -> Result<ListedUpload, ApiError> {
+        let url = format!("{}/{}", self.base_url.trim_end_matches('/'), urlencode(id));
+        let result = ureq::get(&url)
+            .set("X-API-Key", &self.api_key)
+            .set("User-Agent", &format!("yourimageshare-rust/{SDK_VERSION}"))
+            .timeout(self.timeout)
+            .call();
+
+        #[derive(Deserialize)]
+        struct One {
+            data: ListedUpload,
+        }
+
+        call::<One>(result).map(|e| e.data)
+    }
+
+    /// Changes the visibility, title or description of one of your uploads
+    /// (needs the full API key).
+    pub fn update(&self, id: &str, changes: &UpdateOptions) -> Result<ListedUpload, ApiError> {
+        let mut body = serde_json::Map::new();
+        if let Some(visibility) = changes.visibility {
+            body.insert("visibility".into(), visibility.as_str().into());
+        }
+        if let Some(title) = &changes.title {
+            body.insert("title".into(), title.clone().into());
+        }
+        if let Some(description) = &changes.description {
+            body.insert("description".into(), description.clone().into());
+        }
+        let url = format!("{}/{}", self.base_url.trim_end_matches('/'), urlencode(id));
+        let result = ureq::request("PATCH", &url)
+            .set("X-API-Key", &self.api_key)
+            .set("User-Agent", &format!("yourimageshare-rust/{SDK_VERSION}"))
+            .set("Content-Type", "application/json")
+            .timeout(self.timeout)
+            .send_string(&serde_json::Value::Object(body).to_string());
+
+        #[derive(Deserialize)]
+        struct One {
+            data: ListedUpload,
+        }
+
+        call::<One>(result).map(|e| e.data)
     }
 
     /// Removes one of your uploads by id. Returns an [`ApiError`] on a
@@ -290,6 +374,15 @@ fn push_options(fields: &mut Vec<(&str, String)>, opts: &UploadOptions) {
     }
     if opts.allow_duplicate {
         fields.push(("allow_duplicate", "1".to_string()));
+    }
+    if let Some(visibility) = opts.visibility {
+        fields.push(("visibility", visibility.as_str().to_string()));
+    }
+    if let Some(title) = &opts.title {
+        fields.push(("title", title.clone()));
+    }
+    if let Some(description) = &opts.description {
+        fields.push(("description", description.clone()));
     }
 }
 

@@ -18,6 +18,6 @@ mod client;
 mod error;
 mod types;
 
-pub use client::{Client, UploadOptions, DEFAULT_BASE_URL};
+pub use client::{Client, UpdateOptions, UploadOptions, Visibility, DEFAULT_BASE_URL};
 pub use error::ApiError;
 pub use types::{ListMeta, ListResult, ListedUpload, UploadResult};

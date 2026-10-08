@@ -25,6 +25,12 @@ class YIS_API_Client {
 	/** Size of one piece of a chunked upload (the API accepts at most 5 MB). */
 	const CHUNK_BYTES = 5242880;
 
+	/**
+	 * Offloaded media is stored "private": the file works everywhere it's embedded, but YourImageShare
+	 * gives it no page of its own (no comments, reactions or ads next to a site's media).
+	 */
+	const VISIBILITY = 'private';
+
 	/** Largest file YourImageShare accepts. */
 	const MAX_BYTES = 209715200; // 200 MB
 
@@ -56,7 +62,7 @@ class YIS_API_Client {
 			return new WP_Error('yis_read_failed', __('Could not read local file.', 'yourimageshare-media-offload'));
 		}
 
-		return self::post(YIS_OFFLOAD_API_BASE, $api_key, array(), array('uploads', wp_basename($file_path), $contents), 180);
+		return self::post(YIS_OFFLOAD_API_BASE, $api_key, array('visibility' => self::VISIBILITY), array('uploads', wp_basename($file_path), $contents), 180);
 	}
 
 	/**
@@ -85,7 +91,7 @@ class YIS_API_Client {
 			}
 		}
 
-		return self::post(YIS_OFFLOAD_API_BASE, $api_key, array('upload_id' => $upload_id, 'filename' => wp_basename($file_path)), null, 180);
+		return self::post(YIS_OFFLOAD_API_BASE, $api_key, array('upload_id' => $upload_id, 'filename' => wp_basename($file_path), 'visibility' => self::VISIBILITY), null, 180);
 	}
 
 	/**

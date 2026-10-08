@@ -95,6 +95,9 @@ of three ways:
 | `filename` | string | no | With `upload_id`: the original file name (used for the file type check and shown on the upload's page). |
 | `expires_in` | integer | no | Auto-delete this upload after this many seconds (60 to 2,592,000, i.e. 1 minute to 30 days). Omit for a normal, permanent upload. |
 | `allow_duplicate` | boolean | no | Store a new copy even if this account already uploaded the exact same file (see `duplicate` below). |
+| `visibility` | string | no | `unlisted` (default): the file and its page work for anyone with the link, but it isn't listed anywhere. `private`: file only - the page link sends everyone but you straight to the file (no comments, reactions or ads). `public`: listed on the site and indexable. |
+| `title` | string | no | Up to 90 characters. Shown on the upload's page. |
+| `description` | string | no | Up to 500 characters. |
 
 Accepted types: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF and HEIC/HEIF images;
 MP4, WebM, AVI, MOV, M4V, MKV, MPEG, WMV, FLV and 3GP video. HEIC/HEIF and
@@ -120,8 +123,12 @@ Response - `200 OK`:
     "height": 1080,
     "size": 482113,
     "locked": false,
+    "visibility": "unlisted",
+    "title": null,
+    "description": null,
     "expires_at": null,
-    "duplicate": false
+    "duplicate": false,
+    "delete_url": "https://yourimageshare.com/delete#iV3x...k9"
   }
 }
 ```
@@ -137,6 +144,9 @@ Response - `200 OK`:
 | `width`, `height` | Display size in pixels (upright, after EXIF rotation; a video's frame size), or `null` if unknown. |
 | `size` | File size in bytes as stored. |
 | `locked` | `true` if the upload is password-protected. |
+| `visibility` | `private`, `unlisted` or `public` (see the request field above). |
+| `title`, `description` | As set, or `null`. Text goes through the same moderation as the website. |
+| `delete_url` | New uploads only: a private link that deletes this upload without an API key. It is shown once (only a hash is stored) - keep it if you need it. Not returned for duplicates. |
 | `expires_at` | ISO 8601 timestamp this upload will be auto-deleted at, or `null` if it doesn't expire. |
 | `duplicate` | `true` if this account had already uploaded the exact same file: the existing upload is returned and nothing new is stored (it doesn't count as a new file, but the request still counts toward rate limits). Not applied to expiring uploads or with `allow_duplicate=1`. |
 
@@ -161,6 +171,23 @@ file in pieces of at most 5 MB, then finish with `POST /api`:
 
 Pieces of an upload that isn't finished are deleted after 2 hours. Only
 the finishing `POST /api` counts toward the upload rate limits.
+
+### GET /api/{id} - One upload
+
+Returns one of your uploads (full API key) with the same fields as the
+list below. `404` if there's no such upload on your account.
+
+### PATCH /api/{id} - Change an upload
+
+Changes the visibility, title or description of one of your uploads (full
+API key). Send any of `visibility`, `title`, `description` as form fields
+or JSON; an empty `title`/`description` clears it. Answers with the
+updated upload, like `GET /api/{id}`.
+
+```bash
+curl -X PATCH https://yourimageshare.com/api/aB3xY9qRz1 \
+  -H "X-API-Key: YOUR_API_KEY" -d visibility=public -d title="Sunset"
+```
 
 ### GET /api - List your uploads
 
@@ -189,6 +216,8 @@ Response - `200 OK`:
       "height": 1080,
       "size": 482113,
       "locked": false,
+      "visibility": "unlisted",
+      "description": null,
       "expires_at": null,
       "created_at": "2026-07-23T15:43:28+01:00"
     }
@@ -255,7 +284,7 @@ Every error response uses the same shape, regardless of endpoint or cause:
 |---|---|
 | 401 | Missing or invalid API key. |
 | 403 | The account or your current IP has been banned from uploading. |
-| 404 | No matching upload found for that id on this account (delete only). |
+| 404 | No matching upload found for that id on this account (get, change, delete). |
 | 413 | The request body is over 100 MB. Send the file in pieces (`POST /api/chunk`) or as a `url` instead. |
 | 422 | Validation failure - no file provided, an unsupported file type, unreadable image data, dimensions over the 30000x30000px limit, a file over 200 MB, or an unfinished/expired `upload_id`. |
 | 429 | Rate limit exceeded - see [Rate limits](#rate-limits) above. |

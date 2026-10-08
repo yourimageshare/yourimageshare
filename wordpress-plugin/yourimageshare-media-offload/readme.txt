@@ -121,7 +121,8 @@ store your media on YourImageShare instead of your own server.
   "Offload to YourImageShare" on a single file), when you delete an offloaded
   attachment with "Delete remote copy" on, and when you restore a file and
   choose to delete the remote copy.
-* **What is sent:** the media file and its file name, with your API key
+* **What is sent:** the media file and its file name, with your API key and
+  the setting "private" (the file gets no page of its own on YourImageShare)
   (files larger than 20 MB in 5 MB pieces). Deletions send the remote
   file's ID. No post content, user data or other site information is
   sent, and the plugin has no analytics or tracking.
@@ -145,6 +146,7 @@ The plugin also adds suggested text to your site's privacy policy guide
 == Changelog ==
 
 = 1.3.0 =
+* Offloaded files are uploaded as "private": they load wherever your site embeds them, but get no page of their own on YourImageShare.
 * Small image sizes and srcset use YourImageShare's 280 px thumbnail, so grids and thumbnails no longer download the full-size file.
 * Bulk offload runs in the background with WP-Cron and continues by itself after the API's per-minute or daily limit; the settings page shows progress and has a Stop button.
 * New WP-CLI commands: `wp yis status`, `wp yis offload --all|<id>...`, `wp yis restore <id>...`.

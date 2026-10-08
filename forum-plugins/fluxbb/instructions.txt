@@ -23,6 +23,7 @@ community documents for header/footer customization.
 
 ```html
 <script>window.YIS_API_KEY = "YOUR_UPLOAD_ONLY_KEY";</script>
+<script>window.YIS_VISIBILITY = "private"; /* or "unlisted": also a page for anyone with the link */</script>
 <script src="https://yourimageshare.com/assets/js/forum-upload.js"></script>
 ```
 

@@ -96,6 +96,22 @@ type UploadOptions struct {
 	// OnProgress, if set, is called after each piece of a chunked upload
 	// (files over 90 MB) with the bytes sent so far and the total.
 	OnProgress func(sent, total int64)
+	// Visibility: "unlisted" (server default - file and page work for
+	// anyone with the link), "private" (file only, no page for others) or
+	// "public" (listed). Empty means the default.
+	Visibility string
+	// Title (up to 90 characters) and Description (up to 500); empty
+	// means none.
+	Title       string
+	Description string
+}
+
+// UpdateOptions are the fields Update changes; nil leaves a field as it is,
+// a pointer to "" clears a title/description.
+type UpdateOptions struct {
+	Visibility  *string `json:"visibility,omitempty"`
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // Upload uploads a local file by path (up to 200 MB). Files over 90 MB are
@@ -170,8 +186,10 @@ func (c *Client) postUpload(fields map[string]string, opts *UploadOptions) (*Upl
 	if opts != nil && opts.ExpiresIn > 0 {
 		fields["expires_in"] = strconv.Itoa(opts.ExpiresIn)
 	}
-	if opts != nil && opts.AllowDuplicate {
-		fields["allow_duplicate"] = "1"
+	if opts != nil {
+		for name, value := range opts.extraFields() {
+			fields[name] = value
+		}
 	}
 	body, contentType, err := multipartBody(fields, "", nil)
 	if err != nil {
@@ -253,8 +271,8 @@ func (c *Client) UploadReader(r io.Reader, filename string, opts *UploadOptions)
 				return
 			}
 		}
-		if opts.AllowDuplicate {
-			if err := mw.WriteField("allow_duplicate", "1"); err != nil {
+		for name, value := range opts.extraFields() {
+			if err := mw.WriteField(name, value); err != nil {
 				pw.CloseWithError(err)
 				return
 			}
@@ -275,6 +293,62 @@ func (c *Client) UploadReader(r io.Reader, filename string, opts *UploadOptions)
 		return nil, err
 	}
 	return &body.Data, nil
+}
+
+// extraFields are the optional upload form fields besides expires_in.
+func (o *UploadOptions) extraFields() map[string]string {
+	fields := map[string]string{}
+	if o.AllowDuplicate {
+		fields["allow_duplicate"] = "1"
+	}
+	if o.Visibility != "" {
+		fields["visibility"] = o.Visibility
+	}
+	if o.Title != "" {
+		fields["title"] = o.Title
+	}
+	if o.Description != "" {
+		fields["description"] = o.Description
+	}
+	return fields
+}
+
+// Get returns one of your uploads (needs the full API key).
+func (c *Client) Get(id string) (*ListedUpload, error) {
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(c.baseURL, "/")+"/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, fmt.Errorf("yourimageshare: %w", err)
+	}
+	c.setCommonHeaders(req)
+	var out struct {
+		Data ListedUpload `json:"data"`
+	}
+	if err := c.do(req, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
+}
+
+// Update changes the visibility, title or description of one of your
+// uploads (needs the full API key).
+func (c *Client) Update(id string, changes UpdateOptions) (*ListedUpload, error) {
+	payload, err := json.Marshal(changes)
+	if err != nil {
+		return nil, fmt.Errorf("yourimageshare: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPatch, strings.TrimRight(c.baseURL, "/")+"/"+url.PathEscape(id), bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("yourimageshare: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setCommonHeaders(req)
+	var out struct {
+		Data ListedUpload `json:"data"`
+	}
+	if err := c.do(req, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
 }
 
 // List returns your uploads, newest first, 50 per page. page < 2 fetches

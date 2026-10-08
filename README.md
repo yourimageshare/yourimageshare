@@ -128,6 +128,9 @@ can only upload on your behalf - see [Upload-only key](API.md#upload-only-key).
 - [`mybb/`](forum-plugins/mybb) - a real MyBB 1.8 plugin ([download](forum-plugins/yourimageshare-mybb.zip))
 - [`fluxbb/`](forum-plugins/fluxbb), [`punbb/`](forum-plugins/punbb), [`zetaboards/`](forum-plugins/zetaboards) - these three don't have a formal plugin system, so it's a small copy-paste snippet into your template/Admin CP instead
 
+Forum uploads are `private` by default (the image file only, no YourImageShare page);
+each plugin has a setting to switch to `unlisted`.
+
 All six share one underlying widget, [`forum-upload.js`](forum-plugins/forum-upload.js)
 (also served live from `yourimageshare.com/assets/js/forum-upload.js`), so
 fixes/improvements apply everywhere at once. Full setup instructions and

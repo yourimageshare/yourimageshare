@@ -17,13 +17,15 @@ if (!defined('IN_MYBB')) {
 }
 
 define('YIS_FORUMUPLOAD_API_KEY', 'YOUR_UPLOAD_ONLY_KEY');
+// 'private' (default): the image file only, no YourImageShare page. 'unlisted': also a page for anyone with the link.
+define('YIS_FORUMUPLOAD_VISIBILITY', 'private');
 
 $plugins->add_hook('pre_output_page', 'yourimageshare_upload_inject');
 
 function yourimageshare_upload_inject($contents)
 {
 	$snippet = '
-	<script>window.YIS_API_KEY = ' . json_encode(YIS_FORUMUPLOAD_API_KEY) . ';</script>
+	<script>window.YIS_API_KEY = ' . json_encode(YIS_FORUMUPLOAD_API_KEY) . '; window.YIS_VISIBILITY = ' . json_encode(YIS_FORUMUPLOAD_VISIBILITY) . ';</script>
 	<script src="https://yourimageshare.com/assets/js/forum-upload.js"></script>
 	</head>';
 
@@ -46,7 +48,7 @@ function yourimageshare_upload_info()
 		'website'       => 'https://yourimageshare.com/about/api',
 		'author'        => 'YourImageShare',
 		'authorsite'    => 'https://yourimageshare.com',
-		'version'       => '1.0.0',
+		'version'       => '1.1.0',
 		'compatibility' => '18*',
 	);
 }

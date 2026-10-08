@@ -20,8 +20,10 @@ function yis_forumupload_load()
 	global $context;
 
 	$api_key = 'YOUR_UPLOAD_ONLY_KEY';
+	// 'private' (default): the image file only, no YourImageShare page. 'unlisted': also a page for anyone with the link.
+	$visibility = 'private';
 
 	$context['html_headers'] .= '
-	<script>window.YIS_API_KEY = ' . json_encode($api_key) . ';</script>
+	<script>window.YIS_API_KEY = ' . json_encode($api_key) . '; window.YIS_VISIBILITY = ' . json_encode($visibility) . ';</script>
 	<script src="https://yourimageshare.com/assets/js/forum-upload.js"></script>';
 }

@@ -12,8 +12,12 @@ defmodule YourImageShare.UploadResult do
           height: non_neg_integer() | nil,
           size: non_neg_integer() | nil,
           locked: boolean(),
+          visibility: String.t() | nil,
+          title: String.t() | nil,
+          description: String.t() | nil,
           expires_at: String.t() | nil,
-          duplicate: boolean()
+          duplicate: boolean(),
+          delete_url: String.t() | nil
         }
 
   # path is the storage URL as uploaded and can change shortly afterwards when the file is converted
@@ -29,7 +33,11 @@ defmodule YourImageShare.UploadResult do
     :width,
     :height,
     :size,
+    :visibility,
+    :title,
+    :description,
     :expires_at,
+    :delete_url,
     locked: false,
     duplicate: false
   ]
@@ -47,8 +55,12 @@ defmodule YourImageShare.UploadResult do
       height: map["height"],
       size: map["size"],
       locked: map["locked"] == true,
+      visibility: map["visibility"],
+      title: map["title"],
+      description: map["description"],
       expires_at: map["expires_at"],
-      duplicate: map["duplicate"] == true
+      duplicate: map["duplicate"] == true,
+      delete_url: map["delete_url"]
     }
   end
 end
@@ -68,6 +80,8 @@ defmodule YourImageShare.ListedUpload do
           height: non_neg_integer() | nil,
           size: non_neg_integer() | nil,
           locked: boolean(),
+          visibility: String.t() | nil,
+          description: String.t() | nil,
           expires_at: String.t() | nil,
           created_at: String.t()
         }
@@ -83,6 +97,8 @@ defmodule YourImageShare.ListedUpload do
     :width,
     :height,
     :size,
+    :visibility,
+    :description,
     :expires_at,
     :created_at,
     locked: false
@@ -102,6 +118,8 @@ defmodule YourImageShare.ListedUpload do
       height: map["height"],
       size: map["size"],
       locked: map["locked"] == true,
+      visibility: map["visibility"],
+      description: map["description"],
       expires_at: map["expires_at"],
       created_at: map["created_at"]
     }

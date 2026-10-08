@@ -30,30 +30,53 @@ module YourImageShare
     # allow_duplicate: true to store a new copy. Files over 90 MB are sent in
     # 5 MB pieces automatically; the block, if given, is called with
     # (bytes_sent, total) after each piece.
-    def upload(file_path, expires_in: nil, allow_duplicate: false, &on_progress)
+    def upload(file_path, expires_in: nil, allow_duplicate: false, visibility: nil, title: nil, description: nil, &on_progress)
       File.open(file_path, "rb") do |f|
-        upload_io(f, File.basename(file_path), expires_in: expires_in, allow_duplicate: allow_duplicate, &on_progress)
+        upload_io(f, File.basename(file_path), expires_in: expires_in, allow_duplicate: allow_duplicate,
+                                             visibility: visibility, title: title, description: description, &on_progress)
       end
     end
 
     # Uploads from any IO-like object (must respond to #read). filename
     # should include a real extension so the server can infer content type.
-    def upload_io(io, filename, expires_in: nil, allow_duplicate: false, &on_progress)
+    def upload_io(io, filename, expires_in: nil, allow_duplicate: false, visibility: nil, title: nil, description: nil, &on_progress)
       size = io_size(io)
       if size && size > CHUNK_THRESHOLD
         upload_id = send_chunks(io, size, &on_progress)
-        return post_upload([["upload_id", upload_id], ["filename", filename]], expires_in, allow_duplicate)
+        return post_upload([["upload_id", upload_id], ["filename", filename]], expires_in, allow_duplicate,
+                           visibility, title, description)
       end
 
       # Net::HTTP streams IO form values in chunks rather than buffering
       # the whole file into memory.
-      post_upload([["uploads", io, { filename: filename }]], expires_in, allow_duplicate)
+      post_upload([["uploads", io, { filename: filename }]], expires_in, allow_duplicate, visibility, title, description)
     end
 
     # Uploads from a public http(s) link: the server downloads the file
     # itself (up to 200 MB).
-    def upload_url(url, expires_in: nil, allow_duplicate: false)
-      post_upload([["url", url]], expires_in, allow_duplicate)
+    def upload_url(url, expires_in: nil, allow_duplicate: false, visibility: nil, title: nil, description: nil)
+      post_upload([["url", url]], expires_in, allow_duplicate, visibility, title, description)
+    end
+
+    # One of your uploads (needs the full API key).
+    def get(id)
+      uri = URI("#{@base_url.chomp("/")}/#{URI.encode_www_form_component(id)}")
+      request = Net::HTTP::Get.new(uri)
+      set_common_headers(request)
+      ListedUpload.from_json(execute(uri, request)["data"] || {})
+    end
+
+    # Changes the visibility ("private", "unlisted", "public"), title or
+    # description of one of your uploads (needs the full API key). Only the
+    # arguments you pass change; an empty string clears a title/description.
+    def update(id, visibility: nil, title: nil, description: nil)
+      changes = { visibility: visibility, title: title, description: description }.compact
+      uri = URI("#{@base_url.chomp("/")}/#{URI.encode_www_form_component(id)}")
+      request = Net::HTTP::Patch.new(uri)
+      set_common_headers(request)
+      request["Content-Type"] = "application/json"
+      request.body = JSON.generate(changes)
+      ListedUpload.from_json(execute(uri, request)["data"] || {})
     end
 
     # Returns your uploads, newest first, 50 per page. page < 2 fetches the
@@ -80,12 +103,15 @@ module YourImageShare
 
     private
 
-    def post_upload(form, expires_in, allow_duplicate)
+    def post_upload(form, expires_in, allow_duplicate, visibility = nil, title = nil, description = nil)
       uri = URI(@base_url)
       request = Net::HTTP::Post.new(uri)
       set_common_headers(request)
       form << ["expires_in", expires_in.to_s] if expires_in && expires_in > 0
       form << ["allow_duplicate", "1"] if allow_duplicate
+      form << ["visibility", visibility.to_s] if visibility
+      form << ["title", title] unless title.nil?
+      form << ["description", description] unless description.nil?
       request.set_form(form, "multipart/form-data")
 
       body = execute(uri, request, [@timeout, 180].max)

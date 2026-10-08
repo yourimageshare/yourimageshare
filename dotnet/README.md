@@ -69,6 +69,18 @@ await client.UploadUrlAsync("https://example.com/photo.jpg");
 
 A stream is sent in pieces when it is seekable (e.g. a `FileStream`); other streams go up in one request.
 
+### Visibility, titles and changing an upload
+
+Each upload has a `visibility`: `unlisted` (the default - file and page work for anyone with the link, not listed anywhere), `private` (file only - the page link sends everyone but you to the file) or `public` (listed on the site). Uploads can carry a `title` (90 characters) and `description` (500). New uploads return a one-time `delete_url` that deletes the upload without an API key. `get`/`update` need the full API key.
+
+```csharp
+var result = await client.UploadAsync("photo.jpg", new UploadOptions { Visibility = "private", Title = "Sunset" });
+Console.WriteLine(result.DeleteUrl); // shown once - keep it if you need it
+
+var one = await client.GetAsync(result.Id);
+await client.UpdateAsync(result.Id, new UpdateOptions { Visibility = "public", Description = "Lake at dusk" });
+```
+
 ### Error handling
 
 .NET SDK throws instead of returning an error value, unlike the

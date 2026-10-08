@@ -56,6 +56,9 @@ class YourImageShareClient {
     String filePath, {
     int? expiresIn,
     bool allowDuplicate = false,
+    String? visibility,
+    String? title,
+    String? description,
     ProgressCallback? onProgress,
   }) async {
     final size = await fileLength(filePath);
@@ -63,11 +66,13 @@ class YourImageShareClient {
     if (size > _chunkThreshold) {
       final uploadId = await _sendChunks(
           size, (start, end) => readRange(filePath, start, end), onProgress);
-      return _finish(uploadId, name, expiresIn, allowDuplicate);
+      return _finish(uploadId, name, expiresIn, allowDuplicate, visibility,
+          title, description);
     }
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.files.add(await http.MultipartFile.fromPath('uploads', filePath));
-    _addOptions(request, expiresIn, allowDuplicate);
+    _addOptions(
+        request, expiresIn, allowDuplicate, visibility, title, description);
     return _sendUpload(request);
   }
 
@@ -80,18 +85,23 @@ class YourImageShareClient {
     String filename, {
     int? expiresIn,
     bool allowDuplicate = false,
+    String? visibility,
+    String? title,
+    String? description,
     ProgressCallback? onProgress,
   }) async {
     if (bytes.length > _chunkThreshold) {
       final uploadId = await _sendChunks(bytes.length,
           (start, end) async => bytes.sublist(start, end), onProgress);
-      return _finish(uploadId, filename, expiresIn, allowDuplicate);
+      return _finish(uploadId, filename, expiresIn, allowDuplicate, visibility,
+          title, description);
     }
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.files.add(
       http.MultipartFile.fromBytes('uploads', bytes, filename: filename),
     );
-    _addOptions(request, expiresIn, allowDuplicate);
+    _addOptions(
+        request, expiresIn, allowDuplicate, visibility, title, description);
     return _sendUpload(request);
   }
 
@@ -101,29 +111,48 @@ class YourImageShareClient {
     String url, {
     int? expiresIn,
     bool allowDuplicate = false,
+    String? visibility,
+    String? title,
+    String? description,
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.fields['url'] = url;
-    _addOptions(request, expiresIn, allowDuplicate);
+    _addOptions(
+        request, expiresIn, allowDuplicate, visibility, title, description);
     return _sendUpload(request);
   }
 
   void _addOptions(
-      http.MultipartRequest request, int? expiresIn, bool allowDuplicate) {
+      http.MultipartRequest request,
+      int? expiresIn,
+      bool allowDuplicate,
+      String? visibility,
+      String? title,
+      String? description) {
     if (expiresIn != null && expiresIn > 0) {
       request.fields['expires_in'] = expiresIn.toString();
     }
     if (allowDuplicate) {
       request.fields['allow_duplicate'] = '1';
     }
+    if (visibility != null) request.fields['visibility'] = visibility;
+    if (title != null) request.fields['title'] = title;
+    if (description != null) request.fields['description'] = description;
   }
 
   Future<UploadResult> _finish(
-      String uploadId, String filename, int? expiresIn, bool allowDuplicate) {
+      String uploadId,
+      String filename,
+      int? expiresIn,
+      bool allowDuplicate,
+      String? visibility,
+      String? title,
+      String? description) {
     final request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
     request.fields['upload_id'] = uploadId;
     request.fields['filename'] = filename;
-    _addOptions(request, expiresIn, allowDuplicate);
+    _addOptions(
+        request, expiresIn, allowDuplicate, visibility, title, description);
     return _sendUpload(request);
   }
 
@@ -190,6 +219,42 @@ class YourImageShareClient {
     final raw = _decodeOrThrow(response);
     return ListResult.fromJson(raw);
   }
+
+  /// One of your uploads (needs the full API key).
+  Future<ListedUpload> get(String id) async {
+    final request = http.Request(
+        'GET', Uri.parse('${_trimmedBase()}/${Uri.encodeComponent(id)}'));
+    _setCommonHeaders(request);
+    final response =
+        await http.Response.fromStream(await _httpClient.send(request));
+    return ListedUpload.fromJson(
+        _decodeOrThrow(response)['data'] as Map<String, dynamic>);
+  }
+
+  /// Changes the [visibility] (`private`, `unlisted`, `public`), [title] or
+  /// [description] of one of your uploads (needs the full API key). Only
+  /// the arguments you pass change; an empty string clears a
+  /// title/description.
+  Future<ListedUpload> update(String id,
+      {String? visibility, String? title, String? description}) async {
+    final request = http.Request(
+        'PATCH', Uri.parse('${_trimmedBase()}/${Uri.encodeComponent(id)}'))
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode({
+        if (visibility != null) 'visibility': visibility,
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+      });
+    _setCommonHeaders(request);
+    final response =
+        await http.Response.fromStream(await _httpClient.send(request));
+    return ListedUpload.fromJson(
+        _decodeOrThrow(response)['data'] as Map<String, dynamic>);
+  }
+
+  String _trimmedBase() => _baseUrl.endsWith('/')
+      ? _baseUrl.substring(0, _baseUrl.length - 1)
+      : _baseUrl;
 
   /// Removes one of your uploads by id. Throws a
   /// [YourImageShareException] on a 404/401.

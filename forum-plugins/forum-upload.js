@@ -15,7 +15,13 @@
  * every visitor, and the upload-only key can only upload on your behalf,
  * while your main key can also list and delete your uploads.
  *
- * Advanced: call YISForumUpload.init({ apiKey, bbcode, selector }) manually
+ * Visibility (optional, default "private"): "private" uploads are the file
+ * only - YourImageShare gives them no page of their own (no comments,
+ * reactions or ads), which is all a forum post needs. "unlisted" also gives
+ * each image a page for anyone with its link:
+ *   <script>window.YIS_VISIBILITY = "unlisted";</script>
+ *
+ * Advanced: call YISForumUpload.init({ apiKey, bbcode, selector, visibility }) manually
  * instead of relying on window.YIS_API_KEY / the automatic textarea scan.
  * Either key type works with apiKey/YIS_API_KEY - the server enforces the
  * scope, not this script.
@@ -26,12 +32,18 @@
     var API_URL = 'https://yourimageshare.com/api';
     var DEFAULT_SELECTOR = 'textarea';
     var RESCAN_INTERVAL_MS = 1500;
+    var uploadVisibility = 'private';
 
     function init(options) {
         options = options || {};
         var apiKey = options.apiKey || window.YIS_API_KEY;
         var selector = options.selector || DEFAULT_SELECTOR;
         var bbcode = options.bbcode !== false;
+        var visibility = options.visibility || window.YIS_VISIBILITY || 'private';
+        if (['private', 'unlisted', 'public'].indexOf(visibility) === -1) {
+            visibility = 'private';
+        }
+        uploadVisibility = visibility;
 
         if (!apiKey) {
             console.error('YourImageShare upload widget: no API key configured (window.YIS_API_KEY is not set).');
@@ -96,6 +108,7 @@
 
         var formData = new FormData();
         formData.append('uploads', file);
+        formData.append('visibility', uploadVisibility);
 
         fetch(API_URL, {
             method: 'POST',
