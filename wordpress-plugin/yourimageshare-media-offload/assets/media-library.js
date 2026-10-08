@@ -44,7 +44,7 @@
 		var original = $link.text();
 		$link.text(yisOffload.working);
 
-		post('yis_restore_attachment', { attachment_id: id, delete_remote: deleteRemote ? 1 : 0 }).done(function (response) {
+		post('yis_offload_restore_attachment', { attachment_id: id, delete_remote: deleteRemote ? 1 : 0 }).done(function (response) {
 			if (response && response.success) {
 				window.location.reload();
 			} else {

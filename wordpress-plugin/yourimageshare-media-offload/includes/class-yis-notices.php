@@ -11,14 +11,14 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Notices {
+class YIS_Offload_Notices {
 
 	const OPTION_KEY = 'yis_offload_recent_failures';
 	const MAX_STORED = 10;
 
 	public static function init() {
 		add_action('admin_notices', array(__CLASS__, 'render'));
-		add_action('wp_ajax_yis_dismiss_failures', array(__CLASS__, 'ajax_dismiss'));
+		add_action('wp_ajax_yis_offload_dismiss_failures', array(__CLASS__, 'ajax_dismiss'));
 	}
 
 	public static function record_failure($attachment_id, $message, $title = null) {
@@ -47,7 +47,7 @@ class YIS_Notices {
 
 	public static function render() {
 		$screen = get_current_screen();
-		if (!$screen || !in_array($screen->id, array('upload', 'settings_page_' . YIS_Admin_Settings::PAGE_SLUG, 'toplevel_page_' . YIS_Admin_Settings::PAGE_SLUG), true)) {
+		if (!$screen || !in_array($screen->id, array('upload', 'settings_page_' . YIS_Offload_Admin_Settings::PAGE_SLUG, 'toplevel_page_' . YIS_Offload_Admin_Settings::PAGE_SLUG), true)) {
 			return;
 		}
 		if (!current_user_can('upload_files')) {
@@ -63,8 +63,8 @@ class YIS_Notices {
 		wp_register_script('yis-offload-notices', false, array('jquery'), YIS_OFFLOAD_VERSION, true);
 		wp_enqueue_script('yis-offload-notices');
 		wp_add_inline_script('yis-offload-notices', sprintf(
-			'jQuery(function ($) { $("#yis-offload-failures-notice").on("click", ".notice-dismiss", function () { $.post(ajaxurl, { action: "yis_dismiss_failures", nonce: %s }); }); });',
-			wp_json_encode(wp_create_nonce('yis_dismiss_failures'))
+			'jQuery(function ($) { $("#yis-offload-failures-notice").on("click", ".notice-dismiss", function () { $.post(ajaxurl, { action: "yis_offload_dismiss_failures", nonce: %s }); }); });',
+			wp_json_encode(wp_create_nonce('yis_offload_dismiss_failures'))
 		));
 		?>
 		<div class="notice notice-warning is-dismissible" id="yis-offload-failures-notice">
@@ -91,7 +91,7 @@ class YIS_Notices {
 	}
 
 	public static function ajax_dismiss() {
-		check_ajax_referer('yis_dismiss_failures', 'nonce');
+		check_ajax_referer('yis_offload_dismiss_failures', 'nonce');
 		if (!current_user_can('upload_files')) {
 			wp_send_json_error('forbidden', 403);
 		}

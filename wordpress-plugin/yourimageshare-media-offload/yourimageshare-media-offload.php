@@ -45,7 +45,7 @@ require_once YIS_OFFLOAD_PLUGIN_DIR . 'includes/class-yis-admin-settings.php';
 
 if (defined('WP_CLI') && WP_CLI) {
 	require_once YIS_OFFLOAD_PLUGIN_DIR . 'includes/class-yis-cli.php';
-	WP_CLI::add_command('yis', 'YIS_CLI');
+	WP_CLI::add_command('yis', 'YIS_Offload_CLI');
 }
 
 /**
@@ -85,14 +85,42 @@ add_action('admin_init', function () {
 	);
 });
 
+/**
+ * Up to 1.3.0 the per-attachment meta keys used a short "_yis_" prefix; they are now "_yis_offload_". Rename them
+ * once on sites that ran an earlier version, so offloaded files keep resolving to YourImageShare.
+ */
+add_action('admin_init', function () {
+	if ((int) get_option('yis_offload_db_version', 0) >= 2) {
+		return;
+	}
+	global $wpdb;
+	$renames = array(
+		'_yis_remote_url' => '_yis_offload_remote_url',
+		'_yis_remote_id' => '_yis_offload_remote_id',
+		'_yis_remote_type' => '_yis_offload_remote_type',
+		'_yis_remote_width' => '_yis_offload_remote_width',
+		'_yis_remote_height' => '_yis_offload_remote_height',
+		'_yis_remote_thumb' => '_yis_offload_remote_thumb',
+		'_yis_local_deleted' => '_yis_offload_local_deleted',
+	);
+	foreach ($renames as $old => $new) {
+		// one-off rename of this plugin's own meta rows; no API exists for renaming a meta key
+		$wpdb->update($wpdb->postmeta, array('meta_key' => $new), array('meta_key' => $old)); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+	}
+	if (function_exists('wp_cache_flush_group')) {
+		wp_cache_flush_group('post_meta');
+	}
+	update_option('yis_offload_db_version', 2, false);
+});
+
 // a background bulk run must not keep firing after the plugin is switched off
 register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('yis_offload_bulk_tick');
 });
 
-YIS_Notices::init();
-YIS_Media::init();
-YIS_Restore::init();
-YIS_Bulk::init();
-YIS_Media_Library::init();
-YIS_Admin_Settings::init();
+YIS_Offload_Notices::init();
+YIS_Offload_Media::init();
+YIS_Offload_Restore::init();
+YIS_Offload_Bulk::init();
+YIS_Offload_Media_Library::init();
+YIS_Offload_Admin_Settings::init();

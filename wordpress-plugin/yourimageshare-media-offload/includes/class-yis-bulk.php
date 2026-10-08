@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Bulk {
+class YIS_Offload_Bulk {
 
 	const HOOK = 'yis_offload_bulk_tick';
 	const STATE_OPTION = 'yis_offload_bulk_state';
@@ -25,9 +25,9 @@ class YIS_Bulk {
 
 	public static function init() {
 		add_action(self::HOOK, array(__CLASS__, 'tick'));
-		add_action('wp_ajax_yis_bulk_start', array(__CLASS__, 'ajax_start'));
-		add_action('wp_ajax_yis_bulk_stop', array(__CLASS__, 'ajax_stop'));
-		add_action('wp_ajax_yis_bulk_status', array(__CLASS__, 'ajax_status'));
+		add_action('wp_ajax_yis_offload_bulk_start', array(__CLASS__, 'ajax_start'));
+		add_action('wp_ajax_yis_offload_bulk_stop', array(__CLASS__, 'ajax_stop'));
+		add_action('wp_ajax_yis_offload_bulk_status', array(__CLASS__, 'ajax_status'));
 	}
 
 	/** IDs of attachments still to offload (supported type, not offloaded, not failed this run). */
@@ -44,12 +44,12 @@ class YIS_Bulk {
 			'meta_query' => array(
 				'relation' => 'AND',
 				array(
-					'key' => YIS_Media::META_URL,
+					'key' => YIS_Offload_Media::META_URL,
 					'compare' => 'NOT EXISTS',
 				),
 				// files that already failed are skipped, or one broken file would be retried forever
 				array(
-					'key' => YIS_Media::META_FAILED,
+					'key' => YIS_Offload_Media::META_FAILED,
 					'compare' => 'NOT EXISTS',
 				),
 			),
@@ -80,7 +80,7 @@ class YIS_Bulk {
 	/** Starts (or restarts) a background run over the whole library. */
 	public static function start() {
 		// a new run gives files that failed last time one more try
-		delete_post_meta_by_key(YIS_Media::META_FAILED);
+		delete_post_meta_by_key(YIS_Offload_Media::META_FAILED);
 		self::save_state(array(
 			'running' => true,
 			'done' => 0,
@@ -120,7 +120,7 @@ class YIS_Bulk {
 				$next = 0;
 				break;
 			}
-			$result = YIS_Media::offload_attachment((int) $ids[0]);
+			$result = YIS_Offload_Media::offload_attachment((int) $ids[0]);
 			if (is_wp_error($result) && $result->get_error_code() === 'yis_no_key') {
 				$state['running'] = false;
 				$state['message'] = 'no_key';
@@ -151,7 +151,7 @@ class YIS_Bulk {
 	}
 
 	private static function check_request() {
-		check_ajax_referer('yis_media_action', 'nonce');
+		check_ajax_referer('yis_offload_media_action', 'nonce');
 		if (!current_user_can('manage_options')) {
 			wp_send_json_error(array('message' => __('Permission denied.', 'yourimageshare-media-offload')), 403);
 		}

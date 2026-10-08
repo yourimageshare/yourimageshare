@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Storage {
+class YIS_Offload_Storage {
 
 	/**
 	 * Every local file of an attachment: the attached file, every size in

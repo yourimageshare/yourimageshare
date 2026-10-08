@@ -7,7 +7,7 @@
  * Deliberately conservative: removes this plugin's own options only.
  * Does NOT delete anything from YourImageShare (uninstalling a WordPress
  * plugin is not a signal the user wants their hosted media destroyed) and
- * does NOT strip the _yis_remote_* postmeta from attachments (those
+ * does NOT strip the _yis_offload_remote_* postmeta from attachments (those
  * offloaded files are still real, still working, still linked from post
  * content - removing the meta would just make the plugin's own URL
  * filters stop applying while every post still contains local-path <img>
@@ -29,4 +29,5 @@ delete_option('yis_offload_files_offloaded');
 delete_option('yis_offload_recent_failures');
 delete_post_meta_by_key('_yis_offload_failed');
 delete_option('yis_offload_bulk_state');
+delete_option('yis_offload_db_version');
 wp_clear_scheduled_hook('yis_offload_bulk_tick');

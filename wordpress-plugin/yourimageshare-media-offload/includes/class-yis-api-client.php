@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_API_Client {
+class YIS_Offload_API_Client {
 
 	/** Above this size a file is sent in pieces. */
 	const SINGLE_REQUEST_MAX_BYTES = 20971520; // 20 MB

@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Media_Library {
+class YIS_Offload_Media_Library {
 
 	public static function init() {
 		add_filter('manage_media_columns', array(__CLASS__, 'add_column'));
@@ -26,15 +26,15 @@ class YIS_Media_Library {
 			return;
 		}
 		wp_enqueue_script(
-			'yis-media-library',
+			'yis-offload-media-library',
 			plugins_url('assets/media-library.js', YIS_OFFLOAD_PLUGIN_FILE),
 			array('jquery'),
 			YIS_OFFLOAD_VERSION,
 			true
 		);
-		wp_localize_script('yis-media-library', 'yisOffload', array(
+		wp_localize_script('yis-offload-media-library', 'yisOffload', array(
 			'ajaxUrl' => admin_url('admin-ajax.php'),
-			'nonce' => wp_create_nonce('yis_media_action'),
+			'nonce' => wp_create_nonce('yis_offload_media_action'),
 			'confirmRestore' => __('Download this file back to local storage and stop serving it from YourImageShare?', 'yourimageshare-media-offload'),
 			'confirmRestoreDelete' => __('Also delete the remote copy on YourImageShare after restoring? OK deletes it, Cancel keeps it there too.', 'yourimageshare-media-offload'),
 			'working' => __('Working…', 'yourimageshare-media-offload'),
@@ -50,12 +50,12 @@ class YIS_Media_Library {
 		if ($column_name !== 'yis_offload') {
 			return;
 		}
-		if (!YIS_Media::is_supported($attachment_id)) {
+		if (!YIS_Offload_Media::is_supported($attachment_id)) {
 			echo '<span aria-hidden="true">&#8212;</span>';
 			return;
 		}
-		if (YIS_Media::is_offloaded($attachment_id)) {
-			$url = YIS_Media::remote_url($attachment_id);
+		if (YIS_Offload_Media::is_offloaded($attachment_id)) {
+			$url = YIS_Offload_Media::remote_url($attachment_id);
 			printf(
 				'<span class="dashicons dashicons-yes" style="color:#00a32a" aria-hidden="true"></span> <a href="%s" target="_blank" rel="noopener">%s</a>',
 				esc_url($url),
@@ -67,12 +67,12 @@ class YIS_Media_Library {
 	}
 
 	public static function row_actions($actions, $post) {
-		if (!current_user_can('edit_post', $post->ID) || !YIS_Media::is_supported($post->ID)) {
+		if (!current_user_can('edit_post', $post->ID) || !YIS_Offload_Media::is_supported($post->ID)) {
 			return $actions;
 		}
 
-		if (YIS_Media::is_offloaded($post->ID)) {
-			$actions['yis_restore'] = sprintf(
+		if (YIS_Offload_Media::is_offloaded($post->ID)) {
+			$actions['yis_offload_restore'] = sprintf(
 				'<a href="#" class="yis-restore-action" data-id="%d">%s</a>',
 				$post->ID,
 				esc_html__('Restore to local', 'yourimageshare-media-offload')
@@ -89,12 +89,12 @@ class YIS_Media_Library {
 	}
 
 	public static function attachment_field($form_fields, $post) {
-		if (!YIS_Media::is_supported($post->ID) || !current_user_can('edit_post', $post->ID)) {
+		if (!YIS_Offload_Media::is_supported($post->ID) || !current_user_can('edit_post', $post->ID)) {
 			return $form_fields;
 		}
 
-		if (YIS_Media::is_offloaded($post->ID)) {
-			$url = YIS_Media::remote_url($post->ID);
+		if (YIS_Offload_Media::is_offloaded($post->ID)) {
+			$url = YIS_Offload_Media::remote_url($post->ID);
 			$form_fields['yis_offload'] = array(
 				'label' => __('YourImageShare', 'yourimageshare-media-offload'),
 				'input' => 'html',
@@ -111,12 +111,12 @@ class YIS_Media_Library {
 	}
 
 	public static function ajax_offload_single() {
-		check_ajax_referer('yis_media_action', 'nonce');
+		check_ajax_referer('yis_offload_media_action', 'nonce');
 		if (!current_user_can('upload_files')) {
 			wp_send_json_error(array('message' => __('Permission denied.', 'yourimageshare-media-offload')), 403);
 		}
 
-		$attachment_id = isset($_POST['attachment_id']) ? absint($_POST['attachment_id']) : 0;
+		$attachment_id = isset($_POST['attachment_id']) ? absint(wp_unslash($_POST['attachment_id'])) : 0;
 		if (!$attachment_id || get_post_type($attachment_id) !== 'attachment') {
 			wp_send_json_error(array('message' => __('Invalid attachment.', 'yourimageshare-media-offload')));
 		}
@@ -124,14 +124,14 @@ class YIS_Media_Library {
 			wp_send_json_error(array('message' => __('Permission denied.', 'yourimageshare-media-offload')), 403);
 		}
 
-		$result = YIS_Media::offload_attachment($attachment_id);
+		$result = YIS_Offload_Media::offload_attachment($attachment_id);
 		if (is_wp_error($result)) {
 			wp_send_json_error(array('message' => $result->get_error_message()));
 		}
 
 		wp_send_json_success(array(
 			'message' => __('Offloaded to YourImageShare.', 'yourimageshare-media-offload'),
-			'url' => esc_url(YIS_Media::remote_url($attachment_id)),
+			'url' => esc_url(YIS_Offload_Media::remote_url($attachment_id)),
 		));
 	}
 }

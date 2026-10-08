@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_CLI {
+class YIS_Offload_CLI {
 
 	/**
 	 * Shows how much of the Media Library is offloaded.
@@ -28,12 +28,12 @@ class YIS_CLI {
 			'post_status' => 'inherit',
 			'posts_per_page' => 1,
 			'fields' => 'ids',
-			'meta_key' => YIS_Media::META_URL, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- CLI report
+			'meta_key' => YIS_Offload_Media::META_URL, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- CLI report
 		));
-		$state = YIS_Bulk::state();
+		$state = YIS_Offload_Bulk::state();
 		WP_CLI::log(sprintf('Offloaded:        %d', $offloaded->found_posts));
-		WP_CLI::log(sprintf('Still local:      %d', YIS_Bulk::remaining()));
-		WP_CLI::log(sprintf('Storage saved:    %s', YIS_Storage::format_bytes((int) get_option('yis_offload_bytes_saved', 0))));
+		WP_CLI::log(sprintf('Still local:      %d', YIS_Offload_Bulk::remaining()));
+		WP_CLI::log(sprintf('Storage saved:    %s', YIS_Offload_Storage::format_bytes((int) get_option('yis_offload_bytes_saved', 0))));
 		WP_CLI::log(sprintf('Background run:   %s', $state['running'] ? sprintf('running (%d done, %d failed)', $state['done'], $state['failed']) : 'not running'));
 		WP_CLI::log(sprintf('Upload key set:   %s', get_option('yis_offload_upload_key', '') ? 'yes' : 'no'));
 	}
@@ -74,9 +74,9 @@ class YIS_CLI {
 		$dry_run = !empty($assoc_args['dry-run']);
 
 		if ($all) {
-			delete_post_meta_by_key(YIS_Media::META_FAILED); // a new run retries earlier failures once
+			delete_post_meta_by_key(YIS_Offload_Media::META_FAILED); // a new run retries earlier failures once
 		}
-		$ids = $all ? YIS_Bulk::pending_query($limit ? $limit : -1)->posts : array_map('absint', $args);
+		$ids = $all ? YIS_Offload_Bulk::pending_query($limit ? $limit : -1)->posts : array_map('absint', $args);
 		if (!$ids) {
 			WP_CLI::success('Nothing to offload.');
 			return;
@@ -94,7 +94,7 @@ class YIS_CLI {
 		$progress = \WP_CLI\Utils\make_progress_bar('Offloading', count($ids));
 		foreach ($ids as $id) {
 			while (true) {
-				$result = YIS_Media::offload_attachment($id);
+				$result = YIS_Offload_Media::offload_attachment($id);
 				if (!is_wp_error($result) || $result->get_error_code() !== 'yis_rate_limited') {
 					break;
 				}
@@ -138,7 +138,7 @@ class YIS_CLI {
 	public function restore($args, $assoc_args) {
 		$failed = 0;
 		foreach (array_map('absint', $args) as $id) {
-			$result = YIS_Restore::restore($id, !empty($assoc_args['delete-remote']));
+			$result = YIS_Offload_Restore::restore($id, !empty($assoc_args['delete-remote']));
 			if (is_wp_error($result)) {
 				$failed++;
 				WP_CLI::warning(sprintf('#%d: %s', $id, $result->get_error_message()));

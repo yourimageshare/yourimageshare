@@ -13,15 +13,15 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Media {
+class YIS_Offload_Media {
 
-	const META_URL = '_yis_remote_url';
-	const META_ID = '_yis_remote_id';
-	const META_TYPE = '_yis_remote_type';
-	const META_WIDTH = '_yis_remote_width';
-	const META_HEIGHT = '_yis_remote_height';
+	const META_URL = '_yis_offload_remote_url';
+	const META_ID = '_yis_offload_remote_id';
+	const META_TYPE = '_yis_offload_remote_type';
+	const META_WIDTH = '_yis_offload_remote_width';
+	const META_HEIGHT = '_yis_offload_remote_height';
 	/** YourImageShare's 280 px wide WebP thumbnail of the upload. */
-	const META_THUMB = '_yis_remote_thumb';
+	const META_THUMB = '_yis_offload_remote_thumb';
 	const THUMB_WIDTH = 280;
 	/** Set when an offload failed, so a bulk run moves on instead of retrying it forever. */
 	const META_FAILED = '_yis_offload_failed';
@@ -65,7 +65,7 @@ class YIS_Media {
 	/**
 	 * Uploads one attachment to YourImageShare and (per settings) deletes
 	 * the local copy. Safe to call directly - used by the automatic
-	 * new-upload hook above and by YIS_Bulk's existing-media processor.
+	 * new-upload hook above and by YIS_Offload_Bulk's existing-media processor.
 	 *
 	 * @param int        $attachment_id
 	 * @param array|null $metadata Pass the metadata array when already
@@ -108,14 +108,14 @@ class YIS_Media {
 		}
 
 		$upload_key = get_option('yis_offload_upload_key', '');
-		$result = YIS_API_Client::upload($upload_path, $upload_key);
+		$result = YIS_Offload_API_Client::upload($upload_path, $upload_key);
 
 		if (is_wp_error($result)) {
 			// a rate limit or a missing key is not the file's fault: leave it for the next run
 			if (!in_array($result->get_error_code(), array('yis_rate_limited', 'yis_no_key'), true)) {
 				update_post_meta($attachment_id, self::META_FAILED, time());
 			}
-			YIS_Notices::record_failure($attachment_id, $result->get_error_message());
+			YIS_Offload_Notices::record_failure($attachment_id, $result->get_error_message());
 			return $result;
 		}
 
@@ -153,14 +153,14 @@ class YIS_Media {
 		}
 
 		if (get_option('yis_offload_delete_local', '1') === '1') {
-			$bytes = YIS_Storage::calculate_local_bytes($file_path, $metadata);
-			YIS_Storage::delete_local_files($file_path, $metadata);
-			YIS_Storage::record_savings($bytes);
-			update_post_meta($attachment_id, '_yis_local_deleted', 1);
+			$bytes = YIS_Offload_Storage::calculate_local_bytes($file_path, $metadata);
+			YIS_Offload_Storage::delete_local_files($file_path, $metadata);
+			YIS_Offload_Storage::record_savings($bytes);
+			update_post_meta($attachment_id, '_yis_offload_local_deleted', 1);
 		}
 
 		delete_post_meta($attachment_id, self::META_FAILED);
-		YIS_Notices::clear_failure($attachment_id);
+		YIS_Offload_Notices::clear_failure($attachment_id);
 
 		return true;
 	}
@@ -335,9 +335,9 @@ class YIS_Media {
 			return;
 		}
 		$full_key = get_option('yis_offload_full_key', '');
-		$result = YIS_API_Client::delete($remote_id, $full_key);
+		$result = YIS_Offload_API_Client::delete($remote_id, $full_key);
 		if (is_wp_error($result)) {
-			YIS_Notices::record_failure($attachment_id, $result->get_error_message(), get_the_title($attachment_id));
+			YIS_Offload_Notices::record_failure($attachment_id, $result->get_error_message(), get_the_title($attachment_id));
 		}
 	}
 }

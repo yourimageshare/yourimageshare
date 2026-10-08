@@ -146,6 +146,7 @@ The plugin also adds suggested text to your site's privacy policy guide
 == Changelog ==
 
 = 1.3.0 =
+* All of the plugin's class, AJAX action, script and post meta names now use the "yis_offload" prefix; existing offloaded files are migrated automatically.
 * Offloaded files are uploaded as "private": they load wherever your site embeds them, but get no page of their own on YourImageShare.
 * Small image sizes and srcset use YourImageShare's 280 px thumbnail, so grids and thumbnails no longer download the full-size file.
 * Bulk offload runs in the background with WP-Cron and continues by itself after the API's per-minute or daily limit; the settings page shows progress and has a Stop button.
@@ -180,6 +181,9 @@ The plugin also adds suggested text to your site's privacy policy guide
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Thumbnails and srcset from YourImageShare, background bulk offload, WP-CLI commands and files up to 200 MB. Offloaded files are stored as private (no public page).
 
 = 1.2.0 =
 Fixes offloaded images over 1 MB breaking after YourImageShare converts them to WebP. Recommended for everyone.

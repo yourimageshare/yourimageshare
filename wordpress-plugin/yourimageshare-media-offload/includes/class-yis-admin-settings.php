@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
 	die('This file cannot be accessed directly.');
 }
 
-class YIS_Admin_Settings {
+class YIS_Offload_Admin_Settings {
 
 	const OPTION_GROUP = 'yis_offload_settings';
 	const PAGE_SLUG = 'yourimageshare-media-offload';
@@ -46,15 +46,15 @@ class YIS_Admin_Settings {
 			return;
 		}
 		wp_enqueue_script(
-			'yis-admin-settings',
+			'yis-offload-admin-settings',
 			plugins_url('assets/admin-settings.js', YIS_OFFLOAD_PLUGIN_FILE),
 			array('jquery'),
 			YIS_OFFLOAD_VERSION,
 			true
 		);
-		wp_localize_script('yis-admin-settings', 'yisOffload', array(
+		wp_localize_script('yis-offload-admin-settings', 'yisOffload', array(
 			'ajaxUrl' => admin_url('admin-ajax.php'),
-			'nonce' => wp_create_nonce('yis_media_action'),
+			'nonce' => wp_create_nonce('yis_offload_media_action'),
 			'i18n' => array(
 				'starting' => __('Starting…', 'yourimageshare-media-offload'),
 				/* translators: 1: files offloaded so far, 2: files still to do */
@@ -105,7 +105,7 @@ class YIS_Admin_Settings {
 			<div class="card" style="max-width:520px;padding:1em 1.5em;margin:1em 0">
 				<h2 style="margin-top:0"><?php esc_html_e('Storage saved so far', 'yourimageshare-media-offload'); ?></h2>
 				<p style="font-size:1.6em;margin:.2em 0">
-					<strong><?php echo esc_html(YIS_Storage::format_bytes($bytes_saved)); ?></strong>
+					<strong><?php echo esc_html(YIS_Offload_Storage::format_bytes($bytes_saved)); ?></strong>
 				</p>
 				<p class="description">
 					<?php

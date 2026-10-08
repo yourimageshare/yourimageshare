@@ -1,5 +1,5 @@
 /**
- * Settings page side of the background bulk offload (see YIS_Bulk): Start
+ * Settings page side of the background bulk offload (see YIS_Offload_Bulk): Start
  * and Stop buttons, and a status poll every few seconds that shows
  * progress - which also nudges WP-Cron on sites with little traffic.
  */
@@ -50,7 +50,7 @@
 	}
 
 	function poll() {
-		ajax('yis_bulk_status').done(function (response) {
+		ajax('yis_offload_bulk_status').done(function (response) {
 			if (response && response.success) {
 				render(response.data);
 				schedule(response.data.running ? 4000 : 0);
@@ -74,7 +74,7 @@
 		}
 		$startBtn.prop('disabled', true);
 		$status.text(yisOffload.i18n.starting);
-		ajax('yis_bulk_start').done(function (response) {
+		ajax('yis_offload_bulk_start').done(function (response) {
 			if (response && response.success) {
 				render(response.data);
 				schedule(2000);
@@ -86,7 +86,7 @@
 	});
 
 	$stopBtn.on('click', function () {
-		ajax('yis_bulk_stop').done(function (response) {
+		ajax('yis_offload_bulk_stop').done(function (response) {
 			if (response && response.success) {
 				render(response.data);
 				schedule(0);
