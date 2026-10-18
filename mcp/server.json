@@ -7,7 +7,7 @@
     "source": "github",
     "subfolder": "mcp"
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "packages": [
     {
       "registryType": "npm",
@@ -23,6 +23,21 @@
           "format": "string",
           "isSecret": true,
           "name": "YIS_API_KEY"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://yourimageshare.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer YOUR_API_KEY - free key from the API tab at yourimageshare.com/my-account (or append ?key=YOUR_API_KEY). Optional for upload_image: without a key it uploads anonymously (unlisted/private, lower limits).",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
         }
       ]
     }
