@@ -1,8 +1,5 @@
 # YourImageShare API
 
-[![smithery badge](https://smithery.ai/badge/team-54m5/yourimageshare)](https://smithery.ai/servers/team-54m5/yourimageshare)
-[![yourimageshare MCP server](https://glama.ai/mcp/servers/MediaShareORG/yourimageshare/badges/card.svg)](https://glama.ai/mcp/servers/MediaShareORG/yourimageshare)
-
 Free JSON/REST API for [YourImageShare](https://yourimageshare.com) - a free
 image and video hosting platform for anonymous and registered users. Use the
 API to upload, list, and delete files programmatically instead of going
@@ -194,3 +191,6 @@ Each API key gets 20 requests/minute and 500 requests/day by default, plus a
 ## Support
 
 Questions or issues: [yourimageshare.com/contact](https://yourimageshare.com/contact).
+
+[![smithery badge](https://smithery.ai/badge/team-54m5/yourimageshare)](https://smithery.ai/servers/team-54m5/yourimageshare)
+[![yourimageshare MCP server](https://glama.ai/mcp/servers/MediaShareORG/yourimageshare/badges/card.svg)](https://glama.ai/mcp/servers/MediaShareORG/yourimageshare)
