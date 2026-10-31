@@ -18,6 +18,7 @@ available, see [Client libraries](#client-libraries) below.
   - [POST /api - Upload a file](#post-api---upload-a-file)
   - [GET /api - List your uploads](#get-api---list-your-uploads)
   - [DELETE /api/{id} - Delete an upload](#delete-apiid---delete-an-upload)
+  - [POST /api/compare - Before/after slider](#post-apicompare---beforeafter-slider)
 - [Rate limits](#rate-limits)
 - [Errors](#errors)
 - [Client libraries](#client-libraries)
@@ -246,6 +247,40 @@ Response - `200 OK`:
 
 `404` if no upload with that id exists on your account (either it was
 never yours, or it's already been deleted).
+
+### POST /api/compare - Before/after slider
+
+Makes a before/after comparison of two of your own image uploads: a page with
+a slider at `/c/{id}` that can also be embedded on any website. The
+upload-only key works too.
+
+| Field | Required | Description |
+|---|---|---|
+| `before` | yes | Upload id of the "before" image |
+| `after` | yes | Upload id of the "after" image (must differ from `before`) |
+| `title` | no | Up to 120 characters |
+| `label_before` / `label_after` | no | Slider labels, up to 40 characters (default `Before` / `After`) |
+
+```bash
+curl "https://yourimageshare.com/api/compare" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -F "before=aB3xY9qRz1" -F "after=Qw7eR2tY5u"
+```
+
+Response - `201 Created`:
+
+```json
+{
+  "type": "success",
+  "id": "P7uAYy04VA",
+  "url": "https://yourimageshare.com/c/P7uAYy04VA",
+  "embed_url": "https://yourimageshare.com/embed/c/P7uAYy04VA",
+  "embed": { "script": "<blockquote class=\"YISEmbed\" ...", "iframe": "<iframe ..." }
+}
+```
+
+`422` if either id is not one of your image uploads (videos and
+password-protected images can't be used).
 
 ## Rate limits
 
