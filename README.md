@@ -57,6 +57,7 @@ curl "https://yourimageshare.com/api" \
 | `POST` | `/api` | Upload a file |
 | `GET` | `/api` | List your uploads (paginated) |
 | `DELETE` | `/api/{id}` | Delete one of your uploads |
+| `POST` | `/api/compare` | Before/after slider of two of your image uploads (page + embed code) |
 
 Full request/response shapes, rate limits, error codes, and code samples in
 curl, JavaScript, Python, PHP, and Go are in [API.md](API.md).
@@ -89,6 +90,23 @@ OAuth, browser-based - can't be scripted).
 
 No official library for your language? The [full HTTP reference](API.md)
 covers everything needed to call the API directly.
+
+## GitHub Action: Playwright and Cypress failure screenshots
+
+[`yourimageshare/playwright-pr-screenshots`](https://github.com/yourimageshare/playwright-pr-screenshots) shows
+why end-to-end tests failed right in the pull request: it uploads the failure screenshots and visual diffs and posts
+them as images in one PR comment, updated on every run. Works with Playwright and Cypress (it detects which one),
+shows failed visual comparisons as Expected | Actual | Diff with a before/after slider, and keeps the screenshots
+private and deleted after 30 days by default.
+
+```yaml
+- uses: yourimageshare/playwright-pr-screenshots@v1
+  if: always()
+  with:
+    api-key: ${{ secrets.YOURIMAGESHARE_API_KEY }}
+```
+
+Setup for both tools is in its [README](https://github.com/yourimageshare/playwright-pr-screenshots#readme).
 
 ## Expiring uploads
 
