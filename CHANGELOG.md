@@ -6,12 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Each SDK also has its own version, tracked in its `package.json`/
 `pyproject.toml` (currently `yourimageshare` JS SDK 1.1.0, `yourimageshare`
-Python SDK 1.1.0, `yourimageshare-mcp` 1.1.0, `yourimageshare-discord-bot`
+Python SDK 1.1.0, `yourimageshare-mcp` 1.1.2, `yourimageshare-discord-bot`
 0.1.0) - this log covers the repo as a whole rather than duplicating
 per-package release notes.
 
 ## [Unreleased]
 
+- **MCP server 1.1.2: security dependency update.** zod 3.25 -> 4.6.7
+  (CVE-2023-54404) and `@modelcontextprotocol/sdk` 1.29 -> 1.32.2, which
+  also clears the hono, body-parser, fast-uri and ip-address advisories.
+  No tool or schema changes.
 - **API: files up to 200 MB in pieces.** New `POST /api/chunk` takes 5 MB
   pieces (`upload_id`, `index`, `total`, `chunk`); finish with `POST /api`
   and `upload_id` + `filename`. Gets past the 100 MB per-request cap, which

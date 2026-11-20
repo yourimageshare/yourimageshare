@@ -1,5 +1,5 @@
 export const DEFAULT_BASE_URL = 'https://yourimageshare.com/api';
-const SDK_VERSION = '1.1.0';
+const SDK_VERSION = '1.1.2';
 /** Files above this size are sent in pieces (one request can carry at most 100 MB). */
 const CHUNK_THRESHOLD = 90 * 1024 * 1024;
 const CHUNK_SIZE = 5 * 1024 * 1024;

@@ -22,7 +22,7 @@ const client = new YourImageShareClient(apiKey ?? '', process.env.YIS_BASE_URL ?
 const server = new McpServer({
   name: 'yourimageshare',
   title: 'YourImageShare',
-  version: '1.1.0',
+  version: '1.1.2',
   description:
     'Upload, list, and delete images and videos on YourImageShare (free hosting, 200MB limit, no account required for end viewers) and get back a shareable link.',
   websiteUrl: 'https://yourimageshare.com',
